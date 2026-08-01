@@ -358,6 +358,13 @@ async function renderEmployees() {
             </tr>
           `).join('')}
         </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2" style="font-weight:700; border-top:2px solid var(--ink);">Total</td>
+            <td class="num" style="font-weight:700; border-top:2px solid var(--ink);">${money(employeesCache.reduce((sum, e) => sum + Number(e.monthly_salary || 0), 0))}</td>
+            <td style="border-top:2px solid var(--ink);"></td>
+          </tr>
+        </tfoot>
       </table>`}
     </div>
   `;
