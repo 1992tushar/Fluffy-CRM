@@ -1046,25 +1046,17 @@ def post_order_on_behalf(
                                 detail={"code": "credit_warning",
                                         "message": "\n\n".join(parts)})
 
-    existing_orders = (
-        db.query(Order)
-        .filter(
-            Order.customer_phone == customer.phone_number,
-            Order.business_date  == get_current_business_date_str(),
-            Order.is_cancelled   == False,
-        )
-        .all()
-    )
-    for o in existing_orders:
-        o.is_cancelled = True
-        o.status = "cancelled"
-    if existing_orders:
-        db.commit()
-
+    # NOTE: a customer with an active order today keeps it — this call never
+    # cancels/overrides an existing order. It's saved as an additional order
+    # instead (force_additional=True), same as the WhatsApp pipeline does past
+    # the dispatch cutoff. We can't use the pre-cutoff replace-confirmation
+    # flow here since it waits on a customer WhatsApp reply and this action
+    # is synchronous.
     result = process_incoming_order(
         db=db,
         customer_phone=customer.phone_number,
         message=payload.message.strip(),
+        force_additional=True,
     )
     status = result.get("status", "")
     if status in ("order_saved", "order_updated", "repeat_confirmed", "unclear", "received"):

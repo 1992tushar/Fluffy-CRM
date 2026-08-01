@@ -714,8 +714,21 @@ def _handle_confirm_no(db: Session, customer: Customer) -> dict:
     return {"order_id": None, "status": "stale_confirmation_ignored", "parsed": None}
 
 
-def _handle_order(db: Session, customer: Customer, message: str, is_photo: bool) -> dict:
-    """Parse the message as an order, handle duplicate/replace flow, and save."""
+def _handle_order(
+    db: Session,
+    customer: Customer,
+    message: str,
+    is_photo: bool,
+    force_additional: bool = False,
+) -> dict:
+    """Parse the message as an order, handle duplicate/replace flow, and save.
+
+    force_additional skips the before-cutoff replace-confirmation round trip
+    (which waits on a customer WhatsApp reply) and always keeps the existing
+    order intact, saving the new one as an additional order instead. Used by
+    the admin "post order on behalf" action, which is synchronous and has no
+    way to wait for a customer's yes/no.
+    """
     customer_phone = customer.phone_number
     parsed = parse_template_order(customer_phone, message, db=db)
 
@@ -767,7 +780,7 @@ def _handle_order(db: Session, customer: Customer, message: str, is_photo: bool)
             hour=DISPATCH_CUTOFF_HOUR, minute=0, second=0, microsecond=0
         )
 
-        if current_time_ist < cutoff_time:
+        if current_time_ist < cutoff_time and not force_additional:
             # Before dispatch cutoff — ask customer to confirm replacement.
             # FIX: pass lists directly to Order columns (no json.dumps).
             pending_items   = parsed.get("items", [])
@@ -845,6 +858,7 @@ def process_incoming_order(
     is_photo: bool = False,
     business_date: str | None = None,
     is_next_day_override: bool = False,
+    force_additional: bool = False,
 ) -> dict:
     if business_date is None:
         business_date = compute_business_date(datetime.now(timezone.utc)).strftime("%Y-%m-%d")
@@ -902,7 +916,7 @@ def process_incoming_order(
         return _handle_confirm_no(db, customer)
 
     # Intent.ORDER — default
-    return _handle_order(db, customer, message, is_photo=is_photo)
+    return _handle_order(db, customer, message, is_photo=is_photo, force_additional=force_additional)
 
 
 # ── Query helpers ─────────────────────────────────────────────────────────────
