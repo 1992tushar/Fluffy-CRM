@@ -211,6 +211,7 @@ def import_receipts(db: Session, file_bytes: bytes, source_file: str = None) -> 
 
     created = updated = unmatched = 0
     seen = set()
+    seen_dates = []
 
     def cell(row, key):
         i = col.get(key)
@@ -229,6 +230,7 @@ def import_receipts(db: Session, file_bytes: bytes, source_file: str = None) -> 
         mode = str(cell(row, "mode") or "").strip().lower() or None
         amount = _to_amount(cell(row, "amount"))
         rdate = _parse_date(cell(row, "date"))
+        seen_dates.append(rdate)
         status = str(cell(row, "status") or "").strip().lower() or None
         created_by = str(cell(row, "created_by") or "").strip() or None
 
@@ -254,9 +256,12 @@ def import_receipts(db: Session, file_bytes: bytes, source_file: str = None) -> 
             rec.created_by = created_by
             updated += 1
 
+    removed = _purge_stale_ledger_rows(db, existing, seen, seen_dates, "receipt_date")
+
     log = ImportLog(entity="receipts", source_file=source_file,
                     rows_total=created + updated, created=created,
-                    updated=updated, unmatched=unmatched)
+                    updated=updated, unmatched=unmatched,
+                    notes=f"stale_removed={removed}")
     db.add(log)
     db.commit()
     wb.close()
@@ -266,6 +271,7 @@ def import_receipts(db: Session, file_bytes: bytes, source_file: str = None) -> 
         "rows": created + updated,
         "created": created,
         "updated": updated,
+        "removed": removed,
         "unmatched": unmatched,
         "matched": created + updated - unmatched,
     }
@@ -558,12 +564,16 @@ def import_sales_invoices(db: Session, file_bytes: bytes, source_file: str = Non
                 qty=l["qty"], net_amount=l["net"],
             ))
 
+    seen = set(invoices.keys())
+    seen_dates = [inv["date"] for inv in invoices.values()]
+    removed = _purge_stale_ledger_rows(db, existing, seen, seen_dates, "invoice_date")
+
     db.add(ImportLog(entity="sales_invoices", source_file=source_file,
                      rows_total=created + updated, created=created,
                      updated=updated, unmatched=unmatched,
                      notes=f"lines={sum(len(i['lines']) for i in invoices.values())}; "
                            f"total={round(total_amount, 2)}; auto_created={auto_created}; "
-                           f"zero_internal={zero_internal}"))
+                           f"zero_internal={zero_internal}; stale_removed={removed}"))
 
     # The bot imports receipts BEFORE sales, so receipts for a customer that only
     # gets auto-created here (a zero-balance party) were left unattributed. Backfill
@@ -582,6 +592,7 @@ def import_sales_invoices(db: Session, file_bytes: bytes, source_file: str = Non
         "matched": created + updated - unmatched - zero_internal,
         "customers_created": auto_created,
         "receipts_relinked": relinked,
+        "removed": removed,
         "total_fmt": _fmt_inr_local(total_amount),
     }
 
@@ -613,6 +624,34 @@ def _is_total_row(v):
     """True if a key cell is blank or the export's footer 'Total' marker."""
     s = str(v or "").strip().lower()
     return s in ("", "total")
+
+
+def _purge_stale_ledger_rows(db: Session, existing: dict, seen: set, seen_dates: list,
+                             date_attr: str) -> int:
+    """Delete existing rows whose key vanished from a re-uploaded ledger file —
+    e.g. an expense/receipt/bill deleted in Vasy after a prior import. Ledger
+    exports may cover ANY date range (unlike the daily outstanding snapshot),
+    so an unconditional purge would wipe out rows from months not included in
+    this particular upload. Instead, only rows whose own date falls within the
+    min..max date actually seen in THIS file are eligible for removal — that
+    window is the only span the file claims to be complete for.
+
+    Rows with no date (existing) or an undated file (no seen_dates) are left
+    alone rather than guessed at.
+    """
+    dated = [d for d in seen_dates if d is not None]
+    if not dated:
+        return 0
+    lo, hi = min(dated), max(dated)
+    removed = 0
+    for key, rec in existing.items():
+        if key in seen:
+            continue
+        d = getattr(rec, date_attr, None)
+        if d is not None and lo <= d <= hi:
+            db.delete(rec)
+            removed += 1
+    return removed
 
 
 # ── Sales item register (line-item sales; SKU mix + landing cost) ───────────
@@ -861,12 +900,18 @@ def import_purchases(db: Session, file_bytes: bytes, source_file: str = None) ->
         for l in b["lines"]:
             rec.items.append(VasyPurchaseItem(product_name=l["product"], item_code=l["item_code"],
                                               hsn=l["hsn"], rate=l["rate"], qty=l["qty"], amount=l["amount"]))
+
+    seen = set(bills.keys())
+    seen_dates = [b["date"] for b in bills.values()]
+    removed = _purge_stale_ledger_rows(db, existing, seen, seen_dates, "bill_date")
+
     db.add(ImportLog(entity="purchases", source_file=source_file, rows_total=created + updated,
                      created=created, updated=updated, unmatched=0,
-                     notes=f"lines={sum(len(b['lines']) for b in bills.values())}; total={round(total_amount,2)}"))
+                     notes=f"lines={sum(len(b['lines']) for b in bills.values())}; "
+                           f"total={round(total_amount,2)}; stale_removed={removed}"))
     db.commit()
     return {"entity": "purchases", "rows": created + updated, "bills": created + updated,
-            "created": created, "updated": updated, "unmatched": 0,
+            "created": created, "updated": updated, "removed": removed, "unmatched": 0,
             "total_fmt": _fmt_inr_local(total_amount)}
 
 
@@ -930,6 +975,7 @@ def import_expenses(db: Session, file_bytes: bytes, source_file: str = None) -> 
     created = updated = 0
     total_amount = cash_total = 0.0
     seen = set()
+    seen_dates = []
     for row in ws.iter_rows(min_row=header_idx + 2, values_only=True):
         if not row:
             continue
@@ -946,6 +992,7 @@ def import_expenses(db: Session, file_bytes: bytes, source_file: str = None) -> 
         else:
             updated += 1
         rec.expense_date = _parse_date(cell(row, "date"))
+        seen_dates.append(rec.expense_date)
         party = cell(row, "party") if not register_mode else (cell(row, "vendor") or cell(row, "party"))
         rec.party_name = str(party or "").strip()
         rec.party_key = normalize_name(rec.party_name)
@@ -962,16 +1009,18 @@ def import_expenses(db: Session, file_bytes: bytes, source_file: str = None) -> 
         else:
             rec.paid = _to_amount(cell(row, "paid"))
             rec.unpaid = _to_amount(cell(row, "unpaid"))
+    removed = _purge_stale_ledger_rows(db, existing, seen, seen_dates, "expense_date")
+
     fmt = "register (with Payment Data)" if register_mode else "list"
-    notes = f"format={fmt}; total={round(total_amount, 2)}"
+    notes = f"format={fmt}; total={round(total_amount, 2)}; stale_removed={removed}"
     if register_mode:
         notes += f"; cash={round(cash_total, 2)}"
     db.add(ImportLog(entity="expenses", source_file=source_file, rows_total=created + updated,
                      created=created, updated=updated, unmatched=0, notes=notes))
     db.commit()
     return {"entity": "expenses", "rows": created + updated, "created": created,
-            "updated": updated, "unmatched": 0, "total_fmt": _fmt_inr_local(total_amount),
-            "format": fmt}
+            "updated": updated, "removed": removed, "unmatched": 0,
+            "total_fmt": _fmt_inr_local(total_amount), "format": fmt}
 
 
 # ── P3-10 Payments import (money out; header level) ────────────────────────
@@ -1004,6 +1053,7 @@ def import_payments(db: Session, file_bytes: bytes, source_file: str = None) -> 
     created = updated = 0
     total_amount = 0.0
     seen = set()
+    seen_dates = []
     for row in ws.iter_rows(min_row=header_idx + 2, values_only=True):
         if not row:
             continue
@@ -1023,13 +1073,19 @@ def import_payments(db: Session, file_bytes: bytes, source_file: str = None) -> 
         rec.party_key = normalize_name(rec.party_name)
         rec.mode = (str(cell(row, "mode") or "").strip().lower() or None)
         rec.payment_date = _parse_date(cell(row, "date"))
+        seen_dates.append(rec.payment_date)
         rec.amount = amt
         rec.status = (str(cell(row, "status") or "").strip().lower() or None)
+
+    removed = _purge_stale_ledger_rows(db, existing, seen, seen_dates, "payment_date")
+
     db.add(ImportLog(entity="payments", source_file=source_file, rows_total=created + updated,
-                     created=created, updated=updated, unmatched=0, notes=f"total={round(total_amount,2)}"))
+                     created=created, updated=updated, unmatched=0,
+                     notes=f"total={round(total_amount,2)}; stale_removed={removed}"))
     db.commit()
     return {"entity": "payments", "rows": created + updated, "created": created,
-            "updated": updated, "unmatched": 0, "total_fmt": _fmt_inr_local(total_amount)}
+            "updated": updated, "removed": removed, "unmatched": 0,
+            "total_fmt": _fmt_inr_local(total_amount)}
 
 
 # ── Supplier bills import (accounts payable; bill-level, upsert on Bill No) ─

@@ -12,9 +12,13 @@ endpoints. **Vasy is the source of truth for money; OrdeRR only mirrors it.**
 - A footer **`Total`** row (blank/`Total` in the key column) is auto-skipped.
 - Amounts may carry `₹`, commas, or a non-breaking space before a minus sign —
   all handled. Dates accept `DD/MM/YYYY` or `YYYY-MM-DD`.
-- **Ledgers** upsert on their document key → **cumulative & idempotent**: send
-  any date range; re-sending overlaps updates, never duplicates. The DB keeps
-  the union of everything sent.
+- **Ledgers** (receipts, sales-invoices, purchases, expenses, payments) upsert
+  on their document key → **cumulative & idempotent**: send any date range;
+  re-sending overlaps updates, never duplicates. A document **deleted in
+  Vasy** is also removed on re-send, but only within the date span the
+  re-sent file actually covers (min..max date in that file) — a document
+  outside that window is never touched, so a partial-range re-upload can't
+  wipe out unrelated history.
 - **Outstanding** is a **daily snapshot** stamped "today" → send **once per day**
   (that's what builds the balance trend / rising-falling / sharper credit scores).
 - Format: `.xlsx` (or `.xlsm`).
