@@ -399,6 +399,18 @@
         {% if clear_orders %}
             {% for group in area_groups %}
             <div class="area-header">📍 {{ group.area }} <span class="area-count">{{ group.orders|length }}</span></div>
+            {% if group.product_totals %}
+            <div class="summary-table product-table-wrap" style="margin-bottom:10px;">
+                <table>
+                    <thead><tr><th>Product (this area)</th><th>Qty</th><th>Unit</th></tr></thead>
+                    <tbody>
+                        {% for item in group.product_totals %}
+                        <tr><td>{{ erp_name(item.product) }}</td><td><strong>{{ item.total_quantity }}</strong></td><td>{{ item.unit }}</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
             {% for order in group.orders %}
             <div class="order-card{% if order.has_unclear_items %} needs-review{% endif %}">
                 {% if order.has_unclear_items %}
