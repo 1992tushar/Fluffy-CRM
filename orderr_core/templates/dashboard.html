@@ -359,6 +359,7 @@
         <div class="card success"><div class="number">{{ clear_orders|length }}</div><div class="label">Clear</div></div>
         <div class="card warning"><div class="number">{{ unclear_orders|length }}</div><div class="label">Attention</div></div>
         <div class="card"><div class="number">{{ total_items }}</div><div class="label">Items</div></div>
+        <div class="card"><div class="number">{{ grand_total_quantity }}</div><div class="label">Total Quantity</div></div>
     </div>
     <div class="section">
         <div class="date-nav">
@@ -398,7 +399,7 @@
         <h2>✅ Orders</h2>
         {% if clear_orders %}
             {% for group in area_groups %}
-            <div class="area-header">📍 {{ group.area }} <span class="area-count">{{ group.orders|length }}</span></div>
+            <div class="area-header">📍 {{ group.area }} <span class="area-count">{{ group.orders|length }}</span> <span class="area-count" title="Total quantity (all products)">Σ {{ group.total_quantity }}</span></div>
             {% for order in group.orders %}
             <div class="order-card{% if order.has_unclear_items %} needs-review{% endif %}">
                 {% if order.has_unclear_items %}

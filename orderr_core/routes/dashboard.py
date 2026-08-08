@@ -57,8 +57,16 @@ def dashboard(
 
     # Within each area, float orders that need review (a dropped product / an
     # unreadable quantity) to the top so the manager sees the RED cards first.
+    # Each group also gets a single grand-total quantity (every product's qty
+    # added together, regardless of unit) so a route's total load is one glance.
     for group in area_groups:
         group["orders"].sort(key=lambda o: not getattr(o, "has_unclear_items", False))
+        group["total_quantity"] = sum(
+            item.get("quantity", 0)
+            for order in group["orders"]
+            for item in order.items_parsed
+            if isinstance(item, dict)
+        )
 
     product_summary = {}
     for order in clear_orders:
@@ -73,6 +81,8 @@ def dashboard(
                 product_summary[key] = {"product": product, "unit": unit, "total_quantity": 0, "orders_count": 0}
             product_summary[key]["total_quantity"] += quantity
             product_summary[key]["orders_count"]   += 1
+
+    grand_total_quantity = sum(g["total_quantity"] for g in area_groups)
 
     yesterday = (target_date - timedelta(days=1)).isoformat()
     tomorrow  = (target_date + timedelta(days=1)).isoformat()
@@ -123,6 +133,7 @@ def dashboard(
             "area_groups"        : area_groups,
             "unclear_orders"     : unclear_orders,
             "product_summary"    : list(product_summary.values()),
+            "grand_total_quantity": grand_total_quantity,
             "total_items"        : sum(len(o.items_parsed) for o in clear_orders),
             "target_date"        : target_date.isoformat(),
             "target_date_display": target_date.strftime("%d %b %Y"),
