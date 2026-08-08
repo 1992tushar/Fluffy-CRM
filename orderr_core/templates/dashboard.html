@@ -356,10 +356,10 @@
 <div id="tab-orders" class="tab-pane active">
     <div class="cards">
         <div class="card"><div class="number">{{ orders|length }}</div><div class="label">Total Orders</div></div>
-        <div class="card success"><div class="number">{{ clear_orders|length }}</div><div class="label">Clear</div></div>
-        <div class="card warning"><div class="number">{{ unclear_orders|length }}</div><div class="label">Attention</div></div>
-        <div class="card"><div class="number">{{ total_items }}</div><div class="label">Items</div></div>
         <div class="card"><div class="number">{{ grand_total_quantity }}</div><div class="label">Total Quantity</div></div>
+        {% for group in area_groups %}
+        <div class="card"><div class="number">{{ group.total_quantity }}</div><div class="label">📍 {{ group.area }}</div></div>
+        {% endfor %}
     </div>
     <div class="section">
         <div class="date-nav">
