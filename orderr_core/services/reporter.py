@@ -215,6 +215,26 @@ def _build_print_html(data: dict, notes: list[dict]) -> str:
     if not summary_rows:
         summary_rows = '<tr><td colspan="3" style="text-align:center;color:#999;padding:16px;">No orders today</td></tr>'
 
+    # ── Grand-total quantity cards: overall + one per area (every product's
+    # qty added together, regardless of unit) — mirrors the dashboard cards. ──
+    grand_total_quantity = sum(entry["total_quantity"] for entry in product_totals.values())
+    stat_cards = f"""
+            <div class="stat-card">
+                <div class="stat-number">{len(clear_orders)}</div>
+                <div class="stat-label">Total Orders</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{fmt_qty(grand_total_quantity)}</div>
+                <div class="stat-label">Total Quantity</div>
+            </div>"""
+    for group in area_groups:
+        area_qty = sum(entry["total_quantity"] for entry in group.get("product_totals", {}).values())
+        stat_cards += f"""
+            <div class="stat-card">
+                <div class="stat-number">{fmt_qty(area_qty)}</div>
+                <div class="stat-label">&#128205; {group['area']}</div>
+            </div>"""
+
     # ── Per-area sections: each area gets its own product subtotal + hotels ───
     area_sections = ""
     for group in area_groups:
@@ -329,6 +349,32 @@ def _build_print_html(data: dict, notes: list[dict]) -> str:
     margin-top: 4px;
     display: flex;
     justify-content: space-between;
+  }}
+
+  /* ── Stat cards (Total Orders / Total Quantity / per-area quantity) ── */
+  .stat-cards {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 14px 0 20px;
+  }}
+  .stat-card {{
+    flex: 1 1 120px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 10px 12px;
+    text-align: center;
+  }}
+  .stat-number {{
+    font-size: 20px;
+    font-weight: 700;
+  }}
+  .stat-label {{
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #666;
+    margin-top: 2px;
   }}
 
   /* ── Sections ── */
@@ -487,6 +533,11 @@ def _build_print_html(data: dict, notes: list[dict]) -> str:
     <span>{date_str}</span>
     <span>Total Hotels: {len(clear_orders)} &nbsp;|&nbsp; Generated: {generated_at}</span>
   </div>
+</div>
+
+<!-- Stat cards: Total Orders, Total Quantity, area-wise quantity -->
+<div class="stat-cards">
+  {stat_cards}
 </div>
 
 <!-- Section 1: Product Summary -->
