@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from orderr_core.models.order import Order
+from orderr_core.models.invoice import Invoice
 from orderr_core.models.inbound_message import InboundMessage
 from orderr_core.models.customer import Customer
 from orderr_core.services.notifier import send_whatsapp_message
@@ -133,8 +134,21 @@ def generate_daily_report(db: Session, target_date: date | None = None) -> dict:
     # printed sheet reads route-by-route for dispatch.
     from orderr_core.services.order_service import group_orders_by_area
     area_groups = group_orders_by_area(db, clear_orders)
+
+    # An order is "delivered" once it's been billed — invoicing is all-or-
+    # nothing per order (one Invoice row per order_id) — so pending is simply
+    # the totals of orders with no invoice row yet.
+    invoiced_order_ids = {
+        row[0] for row in db.query(Invoice.order_id).filter(
+            Invoice.order_id.in_([o.id for o in clear_orders])
+        ).all()
+    } if clear_orders else set()
+
     for g in area_groups:
         g["product_totals"] = _product_totals_for(g["orders"])
+        g["pending_totals"] = _product_totals_for(
+            [o for o in g["orders"] if o.id not in invoiced_order_ids]
+        )
 
     # ── WhatsApp-friendly product summary string ──────────────────────────────
     if not orders:
@@ -216,8 +230,15 @@ def _build_print_html(data: dict, notes: list[dict]) -> str:
         summary_rows = '<tr><td colspan="3" style="text-align:center;color:#999;padding:16px;">No orders today</td></tr>'
 
     # ── Grand-total quantity cards: overall + one per area (every product's
-    # qty added together, regardless of unit) — mirrors the dashboard cards. ──
-    grand_total_quantity = sum(entry["total_quantity"] for entry in product_totals.values())
+    # qty added together, regardless of unit) — mirrors the dashboard cards.
+    # Pending = the slice of that total not yet invoiced/billed (an order
+    # counts as delivered the moment it's been billed). ─────────────────────
+    grand_total_quantity   = sum(entry["total_quantity"] for entry in product_totals.values())
+    grand_pending_quantity = sum(
+        qty
+        for group in area_groups
+        for qty in (entry["total_quantity"] for entry in group.get("pending_totals", {}).values())
+    )
     stat_cards = f"""
             <div class="stat-card">
                 <div class="stat-number">{len(clear_orders)}</div>
@@ -226,13 +247,19 @@ def _build_print_html(data: dict, notes: list[dict]) -> str:
             <div class="stat-card">
                 <div class="stat-number">{fmt_qty(grand_total_quantity)}</div>
                 <div class="stat-label">Total Quantity</div>
+            </div>
+            <div class="stat-card" style="border-color:#e67e22;">
+                <div class="stat-number" style="color:#c0392b;">{fmt_qty(grand_pending_quantity)}</div>
+                <div class="stat-label">Pending (not billed)</div>
             </div>"""
     for group in area_groups:
-        area_qty = sum(entry["total_quantity"] for entry in group.get("product_totals", {}).values())
+        area_qty    = sum(entry["total_quantity"] for entry in group.get("product_totals", {}).values())
+        pending_qty = sum(entry["total_quantity"] for entry in group.get("pending_totals", {}).values())
         stat_cards += f"""
             <div class="stat-card">
                 <div class="stat-number">{fmt_qty(area_qty)}</div>
                 <div class="stat-label">&#128205; {group['area']}</div>
+                <div class="stat-pending">Pending: {fmt_qty(pending_qty)}</div>
             </div>"""
 
     # ── Per-area sections: each area gets its own product subtotal + hotels ───
@@ -375,6 +402,11 @@ def _build_print_html(data: dict, notes: list[dict]) -> str:
     letter-spacing: .05em;
     color: #666;
     margin-top: 2px;
+  }}
+  .stat-pending {{
+    font-size: 11px;
+    color: #c0392b;
+    margin-top: 4px;
   }}
 
   /* ── Sections ── */

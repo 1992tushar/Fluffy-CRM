@@ -357,8 +357,13 @@
     <div class="cards">
         <div class="card"><div class="number">{{ orders|length }}</div><div class="label">Total Orders</div></div>
         <div class="card"><div class="number">{{ grand_total_quantity }}</div><div class="label">Total Quantity</div></div>
+        <div class="card warning"><div class="number">{{ grand_pending_quantity }}</div><div class="label">Pending (not billed)</div></div>
         {% for group in area_groups %}
-        <div class="card"><div class="number">{{ group.total_quantity }}</div><div class="label">📍 {{ group.area }}</div></div>
+        <div class="card">
+            <div class="number">{{ group.total_quantity }}</div>
+            <div class="label">📍 {{ group.area }}</div>
+            <div style="font-size:11px;color:#c05621;margin-top:4px;">Pending: {{ group.pending_quantity }}</div>
+        </div>
         {% endfor %}
     </div>
     <div class="section">
