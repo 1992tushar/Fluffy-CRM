@@ -57,23 +57,8 @@ def dashboard(
 
     # Within each area, float orders that need review (a dropped product / an
     # unreadable quantity) to the top so the manager sees the RED cards first.
-    # Each group also gets its own product-quantity subtotal, mirroring the
-    # downloaded report, so route totals are visible without downloading.
     for group in area_groups:
         group["orders"].sort(key=lambda o: not getattr(o, "has_unclear_items", False))
-        area_totals = {}
-        for order in group["orders"]:
-            for item in order.items_parsed:
-                if not isinstance(item, dict):
-                    continue
-                product  = item.get("product", "Unknown")
-                quantity = item.get("quantity", 0)
-                unit     = item.get("unit", "kg").lower()
-                key      = f"{product}__{unit}"
-                if key not in area_totals:
-                    area_totals[key] = {"product": product, "unit": unit, "total_quantity": 0}
-                area_totals[key]["total_quantity"] += quantity
-        group["product_totals"] = list(area_totals.values())
 
     product_summary = {}
     for order in clear_orders:
