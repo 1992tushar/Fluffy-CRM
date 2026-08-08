@@ -248,47 +248,6 @@ def _build_print_html(data: dict, notes: list[dict]) -> str:
     if not area_sections:
         area_sections = '<p style="text-align:center;color:#999;padding:24px 0;">No confirmed orders</p>'
 
-    # ── End-of-report totals recap: overall + per-area, for quick reference ───
-    # after scrolling past all the hotel blocks (no need to scroll back to top).
-    recap_area_blocks = "".join(
-        f"""
-            <div class="recap-area">
-                <div class="recap-area-title">📍 {group['area']}</div>
-                <table class="data-table area-subtotal">
-                    <thead>
-                        <tr><th class="product-name">Product</th><th class="qty-ordered">Ordered Qty</th></tr>
-                    </thead>
-                    <tbody>{"".join(
-                        f'''
-                    <tr>
-                        <td class="product-name">{entry['product']}</td>
-                        <td class="qty-ordered">{fmt_qty(entry['total_quantity'])} {entry['unit']}</td>
-                    </tr>'''
-                        for entry in group.get("product_totals", {}).values()
-                    ) or '<tr><td colspan="2" style="text-align:center;color:#999;padding:10px;">No orders</td></tr>'}</tbody>
-                </table>
-            </div>"""
-        for group in area_groups
-    )
-
-    totals_recap_section = f"""
-    <div class="section" style="margin-top:24px;">
-        <div class="section-title">Total Quantities — Recap</div>
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th class="product-name">Product</th>
-                    <th class="qty-ordered">Ordered Qty</th>
-                    <th class="qty-delivered">Delivered Qty ✏️</th>
-                </tr>
-            </thead>
-            <tbody>
-                {summary_rows}
-            </tbody>
-        </table>
-        <div class="recap-area-grid">{recap_area_blocks}</div>
-    </div>"""
-
     # ── Unclear section ───────────────────────────────────────────────────────
     unclear_section = ""
     if unclear_orders:
@@ -473,25 +432,6 @@ def _build_print_html(data: dict, notes: list[dict]) -> str:
   .area-subtotal td {{ padding: 3px 8px; }}
   .area-subtotal .qty-ordered {{ font-weight: 600; }}
 
-  /* ── End-of-report totals recap ── */
-  .recap-area-grid {{
-    margin-top: 14px;
-    column-count: 2;
-    column-gap: 24px;
-  }}
-  .recap-area {{
-    break-inside: avoid-column;
-    margin-bottom: 14px;
-  }}
-  .recap-area-title {{
-    font-size: 12px;
-    font-weight: 700;
-    background: #f0f0f0;
-    padding: 4px 8px;
-    border-left: 4px solid #1a1a1a;
-    margin-bottom: 4px;
-  }}
-
   /* ── Footer ── */
   .footer {{
     margin-top: 32px;
@@ -574,9 +514,6 @@ def _build_print_html(data: dict, notes: list[dict]) -> str:
 
 {unclear_section}
 {notes_section}
-
-<!-- Section 3: End-of-report totals recap (overall + area-wise) -->
-{totals_recap_section}
 
 <!-- Signature row -->
 <div class="sign-row">
