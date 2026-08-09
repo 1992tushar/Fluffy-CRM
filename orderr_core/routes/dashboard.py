@@ -65,11 +65,31 @@ def dashboard(
         ).all()
     } if clear_orders else set()
 
+    def _pending_items_for(orders):
+        """Per-product breakdown (not just a total) of quantity not yet
+        invoiced/billed, so the manager can see WHAT is pending, not just how
+        much — same key (product+unit) grouping as product_summary below."""
+        totals = {}
+        for order in orders:
+            if order.id in invoiced_order_ids:
+                continue
+            for item in order.items_parsed:
+                if not isinstance(item, dict):
+                    continue
+                product = item.get("product", "Unknown")
+                unit    = item.get("unit", "kg").lower()
+                key     = f"{product}__{unit}"
+                if key not in totals:
+                    totals[key] = {"product": product, "unit": unit, "total_quantity": 0}
+                totals[key]["total_quantity"] += item.get("quantity", 0)
+        return sorted(totals.values(), key=lambda x: -x["total_quantity"])
+
     # Within each area, float orders that need review (a dropped product / an
     # unreadable quantity) to the top so the manager sees the RED cards first.
     # Each group also gets a single grand-total quantity (every product's qty
     # added together, regardless of unit) so a route's total load is one glance,
-    # plus a pending quantity — the slice of that total not yet invoiced/billed.
+    # plus a pending quantity — the slice of that total not yet invoiced/billed
+    # — and a pending_items breakdown listing WHICH products make up that total.
     for group in area_groups:
         group["orders"].sort(key=lambda o: not getattr(o, "has_unclear_items", False))
         group["total_quantity"] = sum(
@@ -78,13 +98,8 @@ def dashboard(
             for item in order.items_parsed
             if isinstance(item, dict)
         )
-        group["pending_quantity"] = sum(
-            item.get("quantity", 0)
-            for order in group["orders"]
-            if order.id not in invoiced_order_ids
-            for item in order.items_parsed
-            if isinstance(item, dict)
-        )
+        group["pending_items"] = _pending_items_for(group["orders"])
+        group["pending_quantity"] = sum(i["total_quantity"] for i in group["pending_items"])
 
     product_summary = {}
     for order in clear_orders:
@@ -102,6 +117,17 @@ def dashboard(
 
     grand_total_quantity   = sum(g["total_quantity"]   for g in area_groups)
     grand_pending_quantity = sum(g["pending_quantity"] for g in area_groups)
+
+    # Overall pending breakdown, re-aggregated across areas (the same product
+    # can be pending in more than one area, so sum by product+unit again).
+    grand_pending_items = {}
+    for group in area_groups:
+        for i in group["pending_items"]:
+            key = f"{i['product']}__{i['unit']}"
+            if key not in grand_pending_items:
+                grand_pending_items[key] = {"product": i["product"], "unit": i["unit"], "total_quantity": 0}
+            grand_pending_items[key]["total_quantity"] += i["total_quantity"]
+    grand_pending_items = sorted(grand_pending_items.values(), key=lambda x: -x["total_quantity"])
 
     yesterday = (target_date - timedelta(days=1)).isoformat()
     tomorrow  = (target_date + timedelta(days=1)).isoformat()
@@ -154,6 +180,7 @@ def dashboard(
             "product_summary"    : list(product_summary.values()),
             "grand_total_quantity"   : grand_total_quantity,
             "grand_pending_quantity" : grand_pending_quantity,
+            "grand_pending_items"    : grand_pending_items,
             "total_items"        : sum(len(o.items_parsed) for o in clear_orders),
             "target_date"        : target_date.isoformat(),
             "target_date_display": target_date.strftime("%d %b %Y"),

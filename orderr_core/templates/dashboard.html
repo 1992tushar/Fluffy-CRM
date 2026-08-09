@@ -357,12 +357,36 @@
     <div class="cards">
         <div class="card"><div class="number">{{ orders|length }}</div><div class="label">Total Orders</div></div>
         <div class="card"><div class="number">{{ grand_total_quantity }}</div><div class="label">Total Quantity</div></div>
-        <div class="card warning"><div class="number">{{ grand_pending_quantity }}</div><div class="label">Pending (not billed)</div></div>
+        <div class="card warning">
+            <div class="number">{{ grand_pending_quantity }}</div>
+            <div class="label">Pending (not billed)</div>
+            {% if grand_pending_items %}
+            <details style="margin-top:4px;text-align:left;">
+                <summary style="cursor:pointer;font-size:11px;color:#c05621;">Show items ({{ grand_pending_items|length }})</summary>
+                <table style="width:100%;font-size:11px;margin-top:4px;">
+                    {% for i in grand_pending_items %}
+                    <tr><td>{{ erp_name(i.product) }}</td><td style="text-align:right;white-space:nowrap;"><strong>{{ i.total_quantity }}</strong> {{ i.unit }}</td></tr>
+                    {% endfor %}
+                </table>
+            </details>
+            {% endif %}
+        </div>
         {% for group in area_groups %}
         <div class="card">
             <div class="number">{{ group.total_quantity }}</div>
             <div class="label">📍 {{ group.area }}</div>
-            <div style="font-size:11px;color:#c05621;margin-top:4px;">Pending: {{ group.pending_quantity }}</div>
+            {% if group.pending_items %}
+            <details style="margin-top:4px;text-align:left;">
+                <summary style="cursor:pointer;font-size:11px;color:#c05621;">Pending: {{ group.pending_quantity }} ({{ group.pending_items|length }} item{{ 's' if group.pending_items|length != 1 else '' }})</summary>
+                <table style="width:100%;font-size:11px;margin-top:4px;">
+                    {% for i in group.pending_items %}
+                    <tr><td>{{ erp_name(i.product) }}</td><td style="text-align:right;white-space:nowrap;"><strong>{{ i.total_quantity }}</strong> {{ i.unit }}</td></tr>
+                    {% endfor %}
+                </table>
+            </details>
+            {% else %}
+            <div style="font-size:11px;color:#c05621;margin-top:4px;">Pending: 0</div>
+            {% endif %}
         </div>
         {% endfor %}
     </div>
