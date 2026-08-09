@@ -59,7 +59,10 @@ def get_rate(
                 CustomerRateOverride.effective_from <= business_date,
                 (CustomerRateOverride.effective_to.is_(None))
                 | (CustomerRateOverride.effective_to >= business_date),
-            ).order_by(CustomerRateOverride.effective_from.desc())
+            ).order_by(
+                CustomerRateOverride.effective_from.desc(),
+                CustomerRateOverride.id.desc(),
+            )
         ).scalars().first()
         if override is not None and override.rate_per_unit > 0:
             return RateResult(
