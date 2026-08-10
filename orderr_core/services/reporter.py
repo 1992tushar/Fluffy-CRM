@@ -31,6 +31,17 @@ SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", f"{PLANT_NAME} OrdeRR")
 
 
 from orderr_core.utils import safe_list as _safe_list
+from orderr_core.services.template_parser import GRAM_UNITS
+
+
+def _kg_equivalent(entry: dict) -> float:
+    """A product-totals entry's quantity normalized to kg, for cross-product
+    grand totals — a gram-unit line (e.g. 500 g liver from unit inference)
+    must not be added to a kg total as if it were 500 kg. Per-product display
+    rows keep the raw quantity + unit; only aggregate sums use this."""
+    qty  = entry.get("total_quantity", 0) or 0
+    unit = (entry.get("unit") or "").lower().strip().rstrip(".")
+    return qty / 1000.0 if unit in GRAM_UNITS else qty
 
 
 def report_product_name(product: str) -> str:
@@ -233,11 +244,11 @@ def _build_print_html(data: dict, notes: list[dict]) -> str:
     # qty added together, regardless of unit) — mirrors the dashboard cards.
     # Pending = the slice of that total not yet invoiced/billed (an order
     # counts as delivered the moment it's been billed). ─────────────────────
-    grand_total_quantity   = sum(entry["total_quantity"] for entry in product_totals.values())
+    grand_total_quantity   = sum(_kg_equivalent(entry) for entry in product_totals.values())
     grand_pending_quantity = sum(
-        qty
+        _kg_equivalent(entry)
         for group in area_groups
-        for qty in (entry["total_quantity"] for entry in group.get("pending_totals", {}).values())
+        for entry in group.get("pending_totals", {}).values()
     )
     stat_cards = f"""
             <div class="stat-card">
@@ -253,8 +264,8 @@ def _build_print_html(data: dict, notes: list[dict]) -> str:
                 <div class="stat-label">Pending (not billed)</div>
             </div>"""
     for group in area_groups:
-        area_qty    = sum(entry["total_quantity"] for entry in group.get("product_totals", {}).values())
-        pending_qty = sum(entry["total_quantity"] for entry in group.get("pending_totals", {}).values())
+        area_qty    = sum(_kg_equivalent(entry) for entry in group.get("product_totals", {}).values())
+        pending_qty = sum(_kg_equivalent(entry) for entry in group.get("pending_totals", {}).values())
         stat_cards += f"""
             <div class="stat-card">
                 <div class="stat-number">{fmt_qty(area_qty)}</div>

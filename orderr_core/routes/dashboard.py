@@ -9,6 +9,7 @@ from orderr_core.models.invoice import Invoice
 from orderr_core.auth import require_auth
 from datetime import datetime, date, timezone, timedelta
 from orderr_core.services.order_service import get_current_business_date, group_orders_by_area
+from orderr_core.services.template_parser import GRAM_UNITS
 from orderr_core.config import PLANT_NAME
 import json
 import os
@@ -19,6 +20,15 @@ from orderr_core.templating import make_templates
 templates = make_templates()
 
 from orderr_core.utils import safe_list as _safe_list
+
+
+def _qty_in_kg(item: dict) -> float:
+    """Quantity normalized to kg for cross-product totals — a stray gram-unit
+    line (e.g. 500 g liver from unit inference) must not be added to a kg
+    total as if it were 500 kg."""
+    qty  = item.get("quantity", 0) or 0
+    unit = (item.get("unit") or "").lower().strip().rstrip(".")
+    return qty / 1000.0 if unit in GRAM_UNITS else qty
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -80,8 +90,9 @@ def dashboard(
                 unit    = item.get("unit", "kg").lower()
                 key     = f"{product}__{unit}"
                 if key not in totals:
-                    totals[key] = {"product": product, "unit": unit, "total_quantity": 0}
-                totals[key]["total_quantity"] += item.get("quantity", 0)
+                    totals[key] = {"product": product, "unit": unit, "total_quantity": 0, "total_quantity_kg": 0}
+                totals[key]["total_quantity"]    += item.get("quantity", 0)
+                totals[key]["total_quantity_kg"] += _qty_in_kg(item)
         return sorted(totals.values(), key=lambda x: -x["total_quantity"])
 
     # Within each area, float orders that need review (a dropped product / an
@@ -93,13 +104,13 @@ def dashboard(
     for group in area_groups:
         group["orders"].sort(key=lambda o: not getattr(o, "has_unclear_items", False))
         group["total_quantity"] = sum(
-            item.get("quantity", 0)
+            _qty_in_kg(item)
             for order in group["orders"]
             for item in order.items_parsed
             if isinstance(item, dict)
         )
         group["pending_items"] = _pending_items_for(group["orders"])
-        group["pending_quantity"] = sum(i["total_quantity"] for i in group["pending_items"])
+        group["pending_quantity"] = sum(i["total_quantity_kg"] for i in group["pending_items"])
 
     product_summary = {}
     for order in clear_orders:
