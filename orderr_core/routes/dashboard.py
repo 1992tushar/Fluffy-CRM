@@ -357,6 +357,100 @@ async def analytics_close_bank_upload(
     return RedirectResponse(url=url, status_code=303)
 
 
+@router.get("/analytics/bankrecon", response_class=HTMLResponse)
+def analytics_bankrecon(
+    request: Request,
+    show: str = Query(default="pending", description="pending | reviewed | all"),
+    db: Session = Depends(get_db),
+    username: str = Depends(require_auth),
+):
+    """Daily bank-transaction reconciliation — categorize + remark each row
+    once; the same counterparty auto-fills next time (see bank_categorize.py
+    for why this needs three separate matching mechanisms, not one)."""
+    from orderr_core.models.bank_transaction import BankTransaction
+    from orderr_core.services import bank_categorize
+
+    q = db.query(BankTransaction)
+    if show == "pending":
+        q = q.filter(BankTransaction.reviewed == False)  # noqa: E712
+    elif show == "reviewed":
+        q = q.filter(BankTransaction.reviewed == True)  # noqa: E712
+    rows = q.order_by(BankTransaction.value_date.desc(), BankTransaction.id.desc()).limit(500).all()
+
+    txns = []
+    for r in rows:
+        sug = bank_categorize.suggest_category(db, r) if not r.reviewed else None
+        txns.append({
+            "id": r.id,
+            "value_date": r.value_date.strftime("%d-%b") if r.value_date else "",
+            "description": r.description or "",
+            "amount": f"{r.amount:,.2f}",
+            "direction": r.direction,
+            "category": r.category or (sug["category"] if sug else None),
+            "remark": r.remark or (sug["remark"] if sug else None),
+            "confidence": (sug["confidence"] if sug else ("saved" if r.reviewed else "none")),
+            "is_relay": bool(sug and sug.get("is_relay")),
+            "counterparty_key": (sug["counterparty_key"] if sug else r.counterparty_key) or "",
+            "reviewed": r.reviewed,
+        })
+
+    pending_count = db.query(BankTransaction).filter(BankTransaction.reviewed == False).count()  # noqa: E712
+
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard_analytics_bankrecon.html",
+        context={
+            "plant_name": PLANT_NAME,
+            "current_time": datetime.now(IST).strftime("%d %b %Y, %I:%M %p"),
+            "txns": txns,
+            "show": show,
+            "pending_count": pending_count,
+            "categories": bank_categorize.CATEGORIES,
+            "quick_pick_hotels": bank_categorize.QUICK_PICK_HOTELS,
+            "analytics_view": "bankrecon",
+        },
+    )
+
+
+@router.post("/analytics/bankrecon/categorize")
+async def analytics_bankrecon_categorize(
+    request: Request,
+    db: Session = Depends(get_db),
+    username: str = Depends(require_auth),
+):
+    """Persist a category+remark to one or more transactions (bulk when several
+    rows share a counterparty), optionally teaching the alias table so the
+    same counterparty auto-fills next time. Relay/internal-person accounts
+    must pass save_alias=false — the UI enforces this, never auto-applies."""
+    from orderr_core.services import bank_categorize
+
+    body = await request.json()
+    ids = body.get("ids") or []
+    try:
+        ids = [int(i) for i in ids]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="ids must be a list of integers.")
+    if not ids:
+        raise HTTPException(status_code=400, detail="ids is required.")
+    category = body.get("category")
+    if category:
+        category = str(category)
+    remark = body.get("remark")
+    save_alias = bool(body.get("save_alias"))
+    alias_type = body.get("alias_type") or "direct"
+    counterparty_key = body.get("counterparty_key")
+
+    try:
+        updated = bank_categorize.apply_categorization(
+            db, ids, category, remark, reviewed_by=username,
+            save_alias=save_alias, alias_type=alias_type, counterparty_key=counterparty_key,
+        )
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    return JSONResponse({"updated": updated})
+
+
 @router.get("/analytics/churn", response_class=HTMLResponse)
 def analytics_churn(
     request: Request,
@@ -708,7 +802,7 @@ _PIN_TABS = {
     "close", "financials", "expenses", "revenue",
     "products", "team", "reconcile",
     "credit", "rfm", "churn", "payment", "portfolio", "lifecycle",
-    "wastage", "quality", "datahealth", "imports",
+    "wastage", "quality", "datahealth", "imports", "bankrecon",
 }
 
 

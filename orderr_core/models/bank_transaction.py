@@ -13,7 +13,7 @@ re-uploading an overlapping statement updates rather than duplicates.
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import Integer, String, Numeric, Date, DateTime, Text, func
+from sqlalchemy import Integer, String, Numeric, Date, DateTime, Text, Boolean, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from orderr_core.database import Base
@@ -35,6 +35,18 @@ class BankTransaction(Base):
     imported_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+    # Daily reconciliation / categorization (bank-recon screen). txn_type is the
+    # narration shape (UPI/NEFT/IMPS/CLG/...); counterparty_raw/counterparty_key
+    # are the parsed-and-normalized payer/payee name used for alias lookups.
+    txn_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    counterparty_raw: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    counterparty_key: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
+    category: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    remark: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    reviewed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    reviewed_by: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     def __repr__(self):
         return f"<BankTxn {self.value_date} {self.direction} {self.amount}>"

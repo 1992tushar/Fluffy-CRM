@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ plant_name }} · Bank recon</title>
+<style>
+:root{
+  --ink:#1a1a18;--ink2:#5a5a54;--ink3:#9a9a90;
+  --bg:#f4f3ef;--surface:#fff;--border:rgba(0,0,0,0.09);--border-strong:rgba(0,0,0,0.15);
+  --green:#1a6b41;--green-bg:#e8f5ee;--green-border:#b6ddc8;
+  --amber:#92540a;--amber-bg:#fef3c7;--amber-border:#f5cc6e;
+  --red:#b91c1c;--red-bg:#fee2e2;--red-border:#fca5a5;
+  --blue:#1b4fba;--blue-bg:#eff4ff;--blue-border:#b3c8f7;
+  --r:10px;--shadow:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.05);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;background:var(--bg);color:var(--ink);min-height:100vh}
+.nav{display:flex;align-items:center;background:var(--surface);border-bottom:1px solid var(--border);padding:0 20px;height:52px;position:sticky;top:0;z-index:100;box-shadow:var(--shadow)}
+.nav-back{display:flex;align-items:center;gap:4px;font-size:13px;font-weight:500;color:var(--ink3);text-decoration:none;margin-right:14px;padding:4px 8px;border-radius:6px}
+.nav-back:hover{color:var(--green);background:var(--bg)}
+.nav-logo{font-weight:700;font-size:15px;color:var(--green);display:flex;align-items:center;gap:6px}
+.nav-right{margin-left:auto}
+.date-chip{font-size:12px;color:var(--ink3);background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:4px 12px}
+main{max-width:1280px;margin:0 auto;padding:24px 18px 80px}
+.section-head{display:flex;align-items:baseline;justify-content:space-between;margin:0 2px 12px;gap:12px;flex-wrap:wrap}
+.section-title{font-size:15px;font-weight:700}
+.section-sub{font-size:12px;color:var(--ink3)}
+.note{font-size:11.5px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--amber-border);border-radius:8px;padding:10px 14px;margin:12px 0;line-height:1.5}
+.tabs{display:flex;gap:6px;margin-bottom:14px}
+.tabs a{font-size:12px;font-weight:600;color:var(--ink2);text-decoration:none;padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface)}
+.tabs a.active{background:var(--green);color:#fff;border-color:var(--green)}
+.wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:1080px}
+th{background:var(--bg);color:var(--ink2);text-align:left;padding:9px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;font-weight:700;white-space:nowrap;border-bottom:1px solid var(--border)}
+th.num{text-align:right}
+td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.cr td.num{color:var(--green);font-weight:600}
+tr.dr td.num{color:var(--red);font-weight:600}
+.desc{max-width:280px;font-size:12px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.desc:hover{white-space:normal;overflow:visible}
+select.cat{font-size:12px;padding:5px 6px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);color:var(--ink);min-width:170px}
+input.remark{font-size:12px;padding:5px 8px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);color:var(--ink);width:170px}
+.badge{display:inline-block;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;padding:1px 6px;border-radius:4px;white-space:nowrap}
+.badge.high{background:var(--green-bg);color:var(--green)}
+.badge.medium{background:var(--amber-bg);color:var(--amber)}
+.badge.relay{background:var(--red-bg);color:var(--red)}
+.badge.none{background:var(--bg);color:var(--ink3)}
+.qp{display:inline-flex;gap:4px;margin-left:6px}
+.qp button{font-size:10px;padding:2px 7px;border-radius:5px;border:1px solid var(--blue-border);background:var(--blue-bg);color:var(--blue);cursor:pointer}
+.qp button:hover{background:var(--blue);color:#fff}
+.rowsave{font-size:11px;font-weight:700;color:var(--green);background:var(--green-bg);border:1px solid var(--green-border);padding:5px 10px;border-radius:6px;cursor:pointer;white-space:nowrap}
+.rowsave:hover{background:var(--green);color:#fff}
+.rowsave:disabled{opacity:.5;cursor:default}
+.remember{font-size:10px;color:var(--ink3);display:flex;align-items:center;gap:3px;margin-top:3px}
+.saved{font-size:11px;font-weight:700;color:var(--green)}
+.empty{color:var(--green);text-align:center;padding:26px;font-weight:600}
+.applyall{font-size:10px;color:var(--blue);background:none;border:none;cursor:pointer;text-decoration:underline;padding:0;margin-top:3px;display:block}
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <a href="/dashboard/" class="nav-back">← Dashboard</a>
+  <span class="nav-logo">📊 {{ plant_name }} Analytics</span>
+  <div class="nav-right"><span class="date-chip">{{ current_time }}</span></div>
+</div>
+
+<main>
+  {% include "_analytics_subnav.html" %}
+
+  <div class="section-head">
+    <div class="section-title">🏦 Bank recon — daily transaction categorization</div>
+    <div class="section-sub">{{ pending_count }} pending row(s)</div>
+  </div>
+
+  <div class="note">
+    Tag each row's category + remark once — a repeat counterparty (a vendor, a regular customer, the PhonePe
+    settlement line) auto-fills next time via <b>Remember for next time</b>. Fuel/CNG rows get a category
+    suggestion from the narration text since the vendor changes every time. <b>Kunal/Mayur Hotel</b> walk-in
+    payments and relay accounts (owner/manager/salesperson forwarding a customer's payment) always stay
+    manual on purpose — there's nothing in the bank text itself to learn from for those.
+  </div>
+
+  <div class="tabs">
+    <a href="?show=pending" class="{{ 'active' if show=='pending' else '' }}">Pending</a>
+    <a href="?show=reviewed" class="{{ 'active' if show=='reviewed' else '' }}">Reviewed</a>
+    <a href="?show=all" class="{{ 'active' if show=='all' else '' }}">All</a>
+  </div>
+
+  {% if not txns %}
+  <div class="wrap"><div class="empty">✓ Nothing to review.</div></div>
+  {% else %}
+  <div class="wrap"><div class="scroll">
+    <table>
+      <thead><tr>
+        <th>Date</th>
+        <th>Description</th>
+        <th class="num">Amount</th>
+        <th>Category</th>
+        <th>Remark</th>
+        <th>Save</th>
+      </tr></thead>
+      <tbody id="body">
+      {% for t in txns %}
+        <tr class="{{ t.direction }}" data-id="{{ t.id }}" data-cpkey="{{ t.counterparty_key }}" data-relay="{{ '1' if t.is_relay else '0' }}">
+          <td>{{ t.value_date }}</td>
+          <td class="desc" title="{{ t.description }}">{{ t.description }}</td>
+          <td class="num">{{ '+' if t.direction=='cr' else '-' }}{{ t.amount }}</td>
+          <td>
+            {% if t.reviewed %}
+              <span class="saved">✓ {{ t.category }}</span>
+            {% else %}
+              <select class="cat">
+                <option value="">— pick category —</option>
+                {% for key, label, grp in categories %}
+                <option value="{{ key }}" {{ 'selected' if t.category==key else '' }}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              <div>
+                {% if t.is_relay %}
+                  <span class="badge relay">Relay — always manual</span>
+                {% elif t.confidence=='high' %}
+                  <span class="badge high">learned</span>
+                {% elif t.confidence=='medium' %}
+                  <span class="badge medium">keyword</span>
+                {% else %}
+                  <span class="badge none">manual</span>
+                {% endif %}
+              </div>
+            {% endif %}
+          </td>
+          <td>
+            {% if not t.reviewed %}
+            <input class="remark" type="text" value="{{ t.remark or '' }}" placeholder="remark">
+            <div class="qp">
+              {% for h in quick_pick_hotels %}
+              <button type="button" onclick="quickPick(this, '{{ h }}')">{{ h }}</button>
+              {% endfor %}
+            </div>
+            {% if t.counterparty_key and not t.is_relay %}
+            <label class="remember"><input type="checkbox" class="remembercb" checked> remember for next time</label>
+            <button type="button" class="applyall" onclick="applyToMatching(this)">apply to all rows from this counterparty</button>
+            {% endif %}
+            {% endif %}
+          </td>
+          <td>
+            {% if not t.reviewed %}
+            <button class="rowsave" onclick="saveRow(this)">Save</button>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div></div>
+  {% endif %}
+</main>
+
+<script>
+function quickPick(btn, hotel){
+  const tr = btn.closest('tr');
+  tr.querySelector('select.cat').value = 'customer_payment';
+  tr.querySelector('input.remark').value = 'Received from ' + hotel + ' Customer';
+  const cb = tr.querySelector('.remembercb');
+  if (cb) cb.checked = false; // never alias a scanner-walkin payer — no repeat signal to learn
+}
+
+async function postCategorize(ids, category, remark, saveAlias, counterpartyKey){
+  const r = await fetch('/dashboard/analytics/bankrecon/categorize', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ids: ids, category: category, remark: remark,
+                          save_alias: saveAlias, alias_type: 'direct',
+                          counterparty_key: counterpartyKey})
+  });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.detail || 'save failed');
+  return j;
+}
+
+async function saveRow(btn){
+  const tr = btn.closest('tr');
+  const category = tr.querySelector('select.cat').value;
+  const remark = tr.querySelector('input.remark').value;
+  if (!category){ alert('Pick a category first.'); return; }
+  const cb = tr.querySelector('.remembercb');
+  const saveAlias = cb ? cb.checked : false;
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try{
+    await postCategorize([tr.getAttribute('data-id')], category, remark, saveAlias, tr.getAttribute('data-cpkey'));
+    tr.style.opacity = '.5';
+    tr.querySelectorAll('select,input,button').forEach(el => el.disabled = true);
+    btn.textContent = '✓ Saved';
+  }catch(e){
+    alert('Could not save: ' + e.message);
+    btn.disabled = false; btn.textContent = 'Save';
+  }
+}
+
+async function applyToMatching(btn){
+  const tr = btn.closest('tr');
+  const key = tr.getAttribute('data-cpkey');
+  const category = tr.querySelector('select.cat').value;
+  const remark = tr.querySelector('input.remark').value;
+  if (!category){ alert('Pick a category first.'); return; }
+  const matches = Array.from(document.querySelectorAll('tr[data-cpkey="' + key + '"][data-relay="0"]'))
+    .filter(r => r.style.opacity !== '.5');
+  if (!confirm('Apply "' + category + '" / "' + remark + '" to all ' + matches.length + ' pending row(s) from this counterparty?')) return;
+  const ids = matches.map(r => r.getAttribute('data-id'));
+  try{
+    await postCategorize(ids, category, remark, true, key);
+    matches.forEach(r => {
+      r.style.opacity = '.5';
+      r.querySelectorAll('select,input,button').forEach(el => el.disabled = true);
+    });
+  }catch(e){
+    alert('Could not apply: ' + e.message);
+  }
+}
+</script>
+</body>
+</html>

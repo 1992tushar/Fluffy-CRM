@@ -81,6 +81,8 @@ from orderr_core.models.cash_entry import CashEntry                      # noqa:
 from orderr_core.models.close_period import ClosePeriod                  # noqa: F401
 # 5-Day Close (bank reconciliation) — uploaded bank statement mirror
 from orderr_core.models.bank_transaction import BankTransaction          # noqa: F401
+# Bank-recon — counterparty → category/remark alias, learned from manual tagging
+from orderr_core.models.bank_counterparty_alias import BankCounterpartyAlias  # noqa: F401
 
 # 📣 Broadcast — owner-curated order-reminder list (manual send)
 from orderr_core.models.broadcast_recipient import BroadcastRecipient    # noqa: F401
@@ -314,6 +316,57 @@ def _ensure_vasy_expense_mode_columns():
 
 
 _ensure_vasy_expense_mode_columns()
+
+
+def _ensure_bank_transaction_categorize_columns():
+    """Add the bank-recon columns (txn_type/counterparty_raw/counterparty_key/
+    category/remark/reviewed/reviewed_by/reviewed_at) to a pre-existing
+    bank_transactions table if missing. Nullable/defaulted, so a plain ADD
+    COLUMN works on both SQLite and PostgreSQL. Idempotent."""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    if "bank_transactions" not in insp.get_table_names():
+        return  # fresh DB — create_all already made the current schema
+    cols = {c["name"] for c in insp.get_columns("bank_transactions")}
+    ts_type = ("TIMESTAMP WITH TIME ZONE"
+               if engine.dialect.name == "postgresql" else "DATETIME")
+    with engine.begin() as conn:
+        for col, coltype in (
+            ("txn_type", "VARCHAR"), ("counterparty_raw", "VARCHAR"),
+            ("counterparty_key", "VARCHAR"), ("category", "VARCHAR"),
+            ("remark", "TEXT"), ("reviewed_by", "VARCHAR"), ("reviewed_at", ts_type),
+        ):
+            if col not in cols:
+                conn.execute(text(f"ALTER TABLE bank_transactions ADD COLUMN {col} {coltype}"))
+                print(f"Migration: added bank_transactions.{col} column")
+        if "reviewed" not in cols:
+            default = "FALSE" if engine.dialect.name == "postgresql" else "0"
+            conn.execute(text(f"ALTER TABLE bank_transactions ADD COLUMN reviewed BOOLEAN DEFAULT {default}"))
+            print("Migration: added bank_transactions.reviewed column")
+
+
+_ensure_bank_transaction_categorize_columns()
+
+
+def _seed_bank_counterparty_aliases():
+    """One-time seed of counterparty aliases already confirmed against the
+    owner's actual statement data (see bank_categorize.py). Idempotent —
+    skips any alias_key that already exists, so it never clobbers a manual
+    edit."""
+    from orderr_core.database import SessionLocal
+    from orderr_core.services.bank_categorize import seed_known_aliases
+
+    db = SessionLocal()
+    try:
+        created = seed_known_aliases(db)
+        if created:
+            print(f"Seeded {created} bank counterparty alias(es)")
+    finally:
+        db.close()
+
+
+_seed_bank_counterparty_aliases()
 
 
 from orderr_core.constants import IST
