@@ -439,17 +439,28 @@ def analytics_bankrecon(
     employees = (db.query(Employee.id, Employee.name)
                  .filter(Employee.active == True).order_by(Employee.name).all())  # noqa: E712
     # No supplier master table exists (Vasy vendor is free-text) — the closest
-    # thing to a supplier list is the distinct vendors already seen on Vasy
-    # Supplier Bills (accounts payable). One representative spelling per
-    # vendor_key, since the same vendor can appear with minor spelling drift
-    # across bills.
-    suppliers = (db.query(VasySupplierBill.vendor_key, func.max(VasySupplierBill.vendor).label("vendor"))
-                 .group_by(VasySupplierBill.vendor_key).order_by(func.max(VasySupplierBill.vendor)).all())
+    # thing to a supplier list is every distinct party already seen across
+    # Vasy Supplier Bills (accounts payable) AND the Expense register.
+    # Vasy's own "Supplier/Vendor" Contact list mixes real vendors (Yewale
+    # Traders) with recurring expense-head entries (Diesel, Ice, Bharai, CNG)
+    # — confirmed by the owner as deliberate, not a data-entry mistake, so
+    # both sources belong here. Deduped by the shared normalize_name() key
+    # (party_key/vendor_key are both built from it), one representative
+    # spelling per key.
+    from orderr_core.models.vasy_expense import VasyExpense
+    supplier_bills = (db.query(VasySupplierBill.vendor_key, func.max(VasySupplierBill.vendor).label("label"))
+                       .group_by(VasySupplierBill.vendor_key).all())
+    expense_parties = (db.query(VasyExpense.party_key, func.max(VasyExpense.party_name).label("label"))
+                        .group_by(VasyExpense.party_key).all())
+    supplier_map = {}
+    for key, label in [(r.vendor_key, r.label) for r in supplier_bills] + [(r.party_key, r.label) for r in expense_parties]:
+        supplier_map.setdefault(key, label)  # supplier-bill spelling wins on collision (listed first)
+    suppliers = sorted(supplier_map.items(), key=lambda kv: kv[1])
     parties = (
         [{"type": "customer", "id": str(c.id), "label": c.restaurant_name,
           "sub": c.phone_number or ""} for c in customers]
         + [{"type": "employee", "id": str(e.id), "label": e.name, "sub": "employee"} for e in employees]
-        + [{"type": "supplier", "id": s.vendor_key, "label": s.vendor, "sub": "supplier"} for s in suppliers]
+        + [{"type": "supplier", "id": key, "label": label, "sub": "supplier"} for key, label in suppliers]
     )
 
     return templates.TemplateResponse(
