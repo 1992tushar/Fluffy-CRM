@@ -402,6 +402,10 @@ def analytics_bankrecon(
     from orderr_core.models.vasy_supplier_bill import VasySupplierBill
     from orderr_core.services import bank_categorize
 
+    today = get_current_business_date()
+    export_from = today.replace(day=1).isoformat()
+    export_to = today.isoformat()
+
     q = db.query(BankTransaction)
     if show == "pending":
         q = q.filter(BankTransaction.reviewed == False)  # noqa: E712
@@ -475,6 +479,8 @@ def analytics_bankrecon(
             "created": created,
             "skipped": skipped,
             "pending_count": pending_count,
+            "export_from": export_from,
+            "export_to": export_to,
             "categories": bank_categorize.CATEGORIES,
             "quick_pick_hotels": bank_categorize.QUICK_PICK_HOTELS,
             "parties_json": json.dumps(parties),
@@ -524,6 +530,52 @@ async def analytics_bankrecon_categorize(
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
     return JSONResponse({"updated": updated})
+
+
+@router.get("/analytics/bankrecon/export")
+def analytics_bankrecon_export(
+    frm: str = Query(default=None, alias="from", description="window start YYYY-MM-DD"),
+    to: str = Query(default=None, description="window end YYYY-MM-DD"),
+    db: Session = Depends(get_db),
+    username: str = Depends(require_auth),
+):
+    """Download reviewed transactions as .xlsx for the CA — month-end handoff.
+    Only reviewed rows (a category has actually been picked); unreviewed rows
+    would just confuse the CA with blanks. Defaults to everything reviewed if
+    no window is given."""
+    from fastapi.responses import Response
+    from orderr_core.models.bank_transaction import BankTransaction
+    from orderr_core.services import analytics_service, bank_categorize
+
+    f, t = _parse_iso(frm), _parse_iso(to)
+    q = db.query(BankTransaction).filter(BankTransaction.reviewed == True)  # noqa: E712
+    if f:
+        q = q.filter(BankTransaction.value_date >= f)
+    if t:
+        q = q.filter(BankTransaction.value_date <= t)
+    rows_db = q.order_by(BankTransaction.value_date, BankTransaction.id).all()
+
+    headers = ["Date", "Description", "Ref No", "Amount", "Dr/Cr", "Category", "Party", "Remark", "Reviewed By"]
+    rows = [[
+        r.value_date.isoformat() if r.value_date else "",
+        r.description or "",
+        r.ref_no or "",
+        float(r.amount),
+        "Credit" if r.direction == "cr" else "Debit",
+        bank_categorize.CATEGORY_LABEL.get(r.category, r.category or ""),
+        r.party_label or "",
+        r.remark or "",
+        r.reviewed_by or "",
+    ] for r in rows_db]
+
+    label = f"{f.isoformat()}_to_{t.isoformat()}" if f and t else "all"
+    filename = f"bank-recon-{label}.xlsx"
+    content = analytics_service.build_xlsx("Bank Recon", headers, rows)
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/analytics/churn", response_class=HTMLResponse)

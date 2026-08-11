@@ -63,6 +63,7 @@ input.remark{font-size:12px;padding:5px 8px;border:1px solid var(--border-strong
 .upload{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:12px 14px;margin-bottom:14px}
 .upload label{font-size:12px;font-weight:600;color:var(--ink2)}
 .upload input[type=file]{font-size:12px}
+.upload input[type=date]{font-size:12px;padding:5px 8px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);color:var(--ink)}
 .upload button{font-size:12px;font-weight:700;color:#fff;background:var(--green);border:1px solid var(--green);padding:7px 14px;border-radius:8px;cursor:pointer}
 .upload button:hover{opacity:.9}
 .upload .hint{font-size:11px;color:var(--ink3)}
@@ -110,6 +111,15 @@ input.party-search.linked{border-color:var(--green-border);background:var(--gree
     <input type="file" name="file" accept=".csv" required>
     <button type="submit">Upload</button>
     <span class="hint">Any date range — already-seen transactions are skipped automatically, only new ones get added.</span>
+  </form>
+
+  <form class="upload" method="get" action="/dashboard/analytics/bankrecon/export">
+    <label>Export for CA</label>
+    <input type="date" name="from" value="{{ export_from }}">
+    <span class="hint" style="margin:0">to</span>
+    <input type="date" name="to" value="{{ export_to }}">
+    <button type="submit">⬇ Download .xlsx</button>
+    <span class="hint">Only reviewed transactions — pick the month, download, send to the CA.</span>
   </form>
 
   <div class="note">
