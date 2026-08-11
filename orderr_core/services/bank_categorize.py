@@ -300,3 +300,77 @@ def seed_known_aliases(db: Session) -> int:
     if created:
         db.commit()
     return created
+
+
+def build_export_workbook(rows_db: list, pending_count: int) -> bytes:
+    """Build the CA month-end export: a Transactions sheet (one row per
+    reviewed bank transaction) plus a Summary sheet with (1) a loud warning
+    if any transactions in the window are still unreviewed — those rows are
+    silently absent from the Transactions sheet, and a CA has no way to
+    notice that on their own — and (2) a per-category rollup total, so it's
+    quick to eyeball against Vasy's own registers for the same period."""
+    import io
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill
+
+    wb = openpyxl.Workbook()
+
+    txn_headers = ["Date", "Description", "Ref No", "Amount", "Dr/Cr", "Category", "Party", "Remark", "Reviewed By"]
+    ws = wb.active
+    ws.title = "Transactions"
+    ws.append(txn_headers)
+    for c in ws[1]:
+        c.font = Font(bold=True)
+    totals = {}  # (category_label, direction) -> [amount_sum, count]
+    txn_rows = []
+    for r in rows_db:
+        cat_label = CATEGORY_LABEL.get(r.category, r.category or "(uncategorized)")
+        direction = "Credit" if r.direction == "cr" else "Debit"
+        row = [
+            r.value_date.isoformat() if r.value_date else "",
+            r.description or "", r.ref_no or "", float(r.amount), direction,
+            cat_label, r.party_label or "", r.remark or "", r.reviewed_by or "",
+        ]
+        ws.append(row)
+        txn_rows.append(row)
+        agg = totals.setdefault((cat_label, direction), [0.0, 0])
+        agg[0] += float(r.amount)
+        agg[1] += 1
+    ws.freeze_panes = "A2"
+    for i, h in enumerate(txn_headers, start=1):
+        width = max(len(str(h)), *(len(str(row[i - 1])) for row in txn_rows)) if txn_rows else len(str(h))
+        ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = min(48, width + 2)
+
+    summary = wb.create_sheet("Summary")
+    row_i = 1
+    if pending_count:
+        summary.cell(row=row_i, column=1,
+                      value=f"⚠ {pending_count} transaction(s) in this window are still PENDING REVIEW "
+                            f"and are NOT included in the Transactions sheet.")
+        summary.cell(row=row_i, column=1).font = Font(bold=True, color="B91C1C")
+        summary.cell(row=row_i, column=1).fill = PatternFill("solid", fgColor="FEE2E2")
+        row_i += 2
+    else:
+        summary.cell(row=row_i, column=1, value="✓ All transactions in this window are reviewed.")
+        summary.cell(row=row_i, column=1).font = Font(bold=True, color="1A6B41")
+        row_i += 2
+
+    summary.append(["Category", "Dr/Cr", "Total Amount", "Count"])
+    for c in summary[row_i]:
+        c.font = Font(bold=True)
+    row_i += 1
+    grand_total = 0.0
+    for (cat_label, direction), (amount, count) in sorted(totals.items()):
+        summary.append([cat_label, direction, round(amount, 2), count])
+        grand_total += amount if direction == "Credit" else -amount
+        row_i += 1
+    summary.append([])
+    summary.append(["Net (Credit − Debit)", "", round(grand_total, 2), ""])
+    for c in summary[summary.max_row]:
+        c.font = Font(bold=True)
+    for col, width in {"A": 40, "B": 10, "C": 16, "D": 8}.items():
+        summary.column_dimensions[col].width = width
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()

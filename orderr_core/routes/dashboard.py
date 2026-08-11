@@ -403,8 +403,13 @@ def analytics_bankrecon(
     from orderr_core.services import bank_categorize
 
     today = get_current_business_date()
-    export_from = today.replace(day=1).isoformat()
+    month_start = today.replace(day=1)
+    export_from = month_start.isoformat()
     export_to = today.isoformat()
+    pending_in_export_window = db.query(BankTransaction).filter(
+        BankTransaction.reviewed == False,  # noqa: E712
+        BankTransaction.value_date >= month_start, BankTransaction.value_date <= today,
+    ).count()
 
     q = db.query(BankTransaction)
     if show == "pending":
@@ -481,6 +486,7 @@ def analytics_bankrecon(
             "pending_count": pending_count,
             "export_from": export_from,
             "export_to": export_to,
+            "pending_in_export_window": pending_in_export_window,
             "categories": bank_categorize.CATEGORIES,
             "quick_pick_hotels": bank_categorize.QUICK_PICK_HOTELS,
             "parties_json": json.dumps(parties),
@@ -540,37 +546,31 @@ def analytics_bankrecon_export(
     username: str = Depends(require_auth),
 ):
     """Download reviewed transactions as .xlsx for the CA — month-end handoff.
-    Only reviewed rows (a category has actually been picked); unreviewed rows
-    would just confuse the CA with blanks. Defaults to everything reviewed if
-    no window is given."""
+    Only reviewed rows (a category has actually been picked) go on the
+    Transactions sheet; unreviewed rows would just confuse the CA with
+    blanks — instead they're counted and flagged on a Summary sheet, so
+    nothing falls through the cracks silently. Defaults to everything
+    reviewed if no window is given."""
     from fastapi.responses import Response
     from orderr_core.models.bank_transaction import BankTransaction
-    from orderr_core.services import analytics_service, bank_categorize
+    from orderr_core.services import bank_categorize
 
     f, t = _parse_iso(frm), _parse_iso(to)
-    q = db.query(BankTransaction).filter(BankTransaction.reviewed == True)  # noqa: E712
-    if f:
-        q = q.filter(BankTransaction.value_date >= f)
-    if t:
-        q = q.filter(BankTransaction.value_date <= t)
-    rows_db = q.order_by(BankTransaction.value_date, BankTransaction.id).all()
 
-    headers = ["Date", "Description", "Ref No", "Amount", "Dr/Cr", "Category", "Party", "Remark", "Reviewed By"]
-    rows = [[
-        r.value_date.isoformat() if r.value_date else "",
-        r.description or "",
-        r.ref_no or "",
-        float(r.amount),
-        "Credit" if r.direction == "cr" else "Debit",
-        bank_categorize.CATEGORY_LABEL.get(r.category, r.category or ""),
-        r.party_label or "",
-        r.remark or "",
-        r.reviewed_by or "",
-    ] for r in rows_db]
+    def _window(q):
+        if f:
+            q = q.filter(BankTransaction.value_date >= f)
+        if t:
+            q = q.filter(BankTransaction.value_date <= t)
+        return q
+
+    rows_db = _window(db.query(BankTransaction).filter(BankTransaction.reviewed == True)) \
+        .order_by(BankTransaction.value_date, BankTransaction.id).all()  # noqa: E712
+    pending_count = _window(db.query(BankTransaction).filter(BankTransaction.reviewed == False)).count()  # noqa: E712
 
     label = f"{f.isoformat()}_to_{t.isoformat()}" if f and t else "all"
     filename = f"bank-recon-{label}.xlsx"
-    content = analytics_service.build_xlsx("Bank Recon", headers, rows)
+    content = bank_categorize.build_export_workbook(rows_db, pending_count)
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
