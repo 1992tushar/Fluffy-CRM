@@ -33,8 +33,10 @@ class BankCounterpartyAlias(Base):
     # RESTAURANT → the Customer record for Nirvana Hotel), learned the same
     # way as category/remark. Denormalized label so the recon screen never
     # needs a join. Null for relay aliases (attribution varies every time).
-    party_type      = Column(String, nullable=True)      # "customer" | "employee"
-    party_id        = Column(Integer, nullable=True)
+    # String, not FK: suppliers have no master table, only VasySupplierBill's
+    # normalized vendor_key, so the id namespace must be string-typed.
+    party_type      = Column(String, nullable=True)      # "customer" | "employee" | "supplier"
+    party_id        = Column(String, nullable=True)
     party_label     = Column(String, nullable=True)
     alias_type      = Column(String, nullable=False, default="direct")  # "direct" | "relay"
     source          = Column(String, nullable=True)       # e.g. "bankrecon-manual", "bankrecon-seed"

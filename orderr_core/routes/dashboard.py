@@ -399,6 +399,7 @@ def analytics_bankrecon(
     from orderr_core.models.bank_transaction import BankTransaction
     from orderr_core.models.customer import Customer
     from orderr_core.models.employee import Employee
+    from orderr_core.models.vasy_supplier_bill import VasySupplierBill
     from orderr_core.services import bank_categorize
 
     q = db.query(BankTransaction)
@@ -437,10 +438,18 @@ def analytics_bankrecon(
                  .filter(Customer.is_active == True).order_by(Customer.restaurant_name).all())  # noqa: E712
     employees = (db.query(Employee.id, Employee.name)
                  .filter(Employee.active == True).order_by(Employee.name).all())  # noqa: E712
+    # No supplier master table exists (Vasy vendor is free-text) — the closest
+    # thing to a supplier list is the distinct vendors already seen on Vasy
+    # Supplier Bills (accounts payable). One representative spelling per
+    # vendor_key, since the same vendor can appear with minor spelling drift
+    # across bills.
+    suppliers = (db.query(VasySupplierBill.vendor_key, func.max(VasySupplierBill.vendor).label("vendor"))
+                 .group_by(VasySupplierBill.vendor_key).order_by(func.max(VasySupplierBill.vendor)).all())
     parties = (
-        [{"type": "customer", "id": c.id, "label": c.restaurant_name,
+        [{"type": "customer", "id": str(c.id), "label": c.restaurant_name,
           "sub": c.phone_number or ""} for c in customers]
-        + [{"type": "employee", "id": e.id, "label": e.name, "sub": "employee"} for e in employees]
+        + [{"type": "employee", "id": str(e.id), "label": e.name, "sub": "employee"} for e in employees]
+        + [{"type": "supplier", "id": s.vendor_key, "label": s.vendor, "sub": "supplier"} for s in suppliers]
     )
 
     return templates.TemplateResponse(
@@ -491,10 +500,7 @@ async def analytics_bankrecon_categorize(
     alias_type = body.get("alias_type") or "direct"
     party_type = body.get("party_type") or None
     party_id_raw = body.get("party_id")
-    try:
-        party_id = int(party_id_raw) if party_id_raw not in (None, "") else None
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail="party_id must be an integer.")
+    party_id = str(party_id_raw) if party_id_raw not in (None, "") else None
     party_label = body.get("party_label") or None
 
     try:

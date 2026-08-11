@@ -47,8 +47,12 @@ class BankTransaction(Base):
     # Which ledger party this transaction belongs to — e.g. the actual Customer
     # record for "NIRRVANNA RESTAURANT", not just the category. party_label is
     # denormalized (cached at tag time) so the screen never needs a join.
-    party_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)   # "customer" | "employee"
-    party_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # party_id is a string, not a numeric FK: customers/employees use their PK
+    # (as text), but there's no supplier master — only VasySupplierBill's
+    # normalized vendor_key — so the id namespace has to be string-typed to
+    # cover all three party types.
+    party_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)   # "customer"|"employee"|"supplier"
+    party_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     party_label: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     reviewed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     reviewed_by: Mapped[Optional[str]] = mapped_column(String, nullable=True)

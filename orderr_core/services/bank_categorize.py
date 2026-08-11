@@ -193,17 +193,22 @@ def suggest_category(db: Session, txn: BankTransaction) -> dict:
     }
 
 
+PARTY_TYPES = ("customer", "employee", "supplier")
+
+
 def apply_categorization(
     db: Session, txn_ids: list, category: str, remark: Optional[str], reviewed_by: str,
     save_alias: bool = False, alias_type: str = "direct",
-    party_type: Optional[str] = None, party_id: Optional[int] = None, party_label: Optional[str] = None,
+    party_type: Optional[str] = None, party_id: Optional[str] = None, party_label: Optional[str] = None,
 ) -> int:
     """Persist a category+remark(+party link) to one or more transactions, and
     optionally teach the alias table so the same counterparty auto-fills next
-    time — including which ledger party it belongs to."""
+    time — including which ledger party it belongs to. party_id is a string:
+    customers/employees use their PK (as text); suppliers have no master
+    table, only VasySupplierBill's normalized vendor_key."""
     if category and category not in CATEGORY_KEYS:
         raise ValueError(f"Unknown category '{category}'")
-    if party_type and party_type not in ("customer", "employee"):
+    if party_type and party_type not in PARTY_TYPES:
         raise ValueError(f"Unknown party_type '{party_type}'")
     now = datetime.now(IST)
     rows = db.query(BankTransaction).filter(BankTransaction.id.in_(txn_ids)).all()

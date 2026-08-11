@@ -265,7 +265,8 @@ function partySearch(input){
     hits.forEach(p => {
       const d = document.createElement('div');
       d.className = 'party-opt';
-      d.innerHTML = (p.type === 'employee' ? '🧑 ' : '🏨 ') + p.label + '<div class="sub">' + (p.sub || '') + '</div>';
+      const icon = p.type === 'employee' ? '🧑 ' : (p.type === 'supplier' ? '🚚 ' : '🏨 ');
+      d.innerHTML = icon + p.label + '<div class="sub">' + (p.sub || '') + '</div>';
       d.onclick = () => setParty(tr, p);
       list.appendChild(d);
     });

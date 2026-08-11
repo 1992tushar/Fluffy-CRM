@@ -336,7 +336,7 @@ def _ensure_bank_transaction_categorize_columns():
             ("txn_type", "VARCHAR"), ("counterparty_raw", "VARCHAR"),
             ("counterparty_key", "VARCHAR"), ("category", "VARCHAR"),
             ("remark", "TEXT"), ("reviewed_by", "VARCHAR"), ("reviewed_at", ts_type),
-            ("party_type", "VARCHAR"), ("party_id", "INTEGER"), ("party_label", "VARCHAR"),
+            ("party_type", "VARCHAR"), ("party_id", "VARCHAR"), ("party_label", "VARCHAR"),
         ):
             if col not in cols:
                 conn.execute(text(f"ALTER TABLE bank_transactions ADD COLUMN {col} {coltype}"))
@@ -350,6 +350,30 @@ def _ensure_bank_transaction_categorize_columns():
 _ensure_bank_transaction_categorize_columns()
 
 
+def _ensure_bank_party_id_is_string():
+    """party_id started as INTEGER (customer/employee PKs only); adding
+    suppliers (identified by VasySupplierBill's string vendor_key, no numeric
+    master) needs it widened to VARCHAR. SQLite already tolerates this with
+    no DDL change (weak column typing); Postgres needs an explicit ALTER.
+    Idempotent — checks the live column type first."""
+    if engine.dialect.name != "postgresql":
+        return
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    for table in ("bank_transactions", "bank_counterparty_aliases"):
+        if table not in insp.get_table_names():
+            continue
+        cols = {c["name"]: c["type"] for c in insp.get_columns(table)}
+        if "party_id" in cols and "INTEGER" in str(cols["party_id"]).upper():
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {table} ALTER COLUMN party_id TYPE VARCHAR USING party_id::text"))
+            print(f"Migration: widened {table}.party_id to VARCHAR")
+
+
+_ensure_bank_party_id_is_string()
+
+
 def _ensure_bank_counterparty_alias_party_columns():
     """Add party_type/party_id/party_label to a pre-existing
     bank_counterparty_aliases table if missing. Idempotent."""
@@ -361,7 +385,7 @@ def _ensure_bank_counterparty_alias_party_columns():
     cols = {c["name"] for c in insp.get_columns("bank_counterparty_aliases")}
     with engine.begin() as conn:
         for col, coltype in (
-            ("party_type", "VARCHAR"), ("party_id", "INTEGER"), ("party_label", "VARCHAR"),
+            ("party_type", "VARCHAR"), ("party_id", "VARCHAR"), ("party_label", "VARCHAR"),
         ):
             if col not in cols:
                 conn.execute(text(f"ALTER TABLE bank_counterparty_aliases ADD COLUMN {col} {coltype}"))
