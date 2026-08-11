@@ -29,6 +29,13 @@ class BankCounterpartyAlias(Base):
     alias_key       = Column(String, nullable=False, unique=True, index=True)  # normalize_name(counterparty)
     category        = Column(String, nullable=True)      # one of bank_categorize.CATEGORY_KEYS; null for relay
     remark_template = Column(String, nullable=True)
+    # Which ledger party this counterparty resolves to (e.g. NIRRVANNA
+    # RESTAURANT → the Customer record for Nirvana Hotel), learned the same
+    # way as category/remark. Denormalized label so the recon screen never
+    # needs a join. Null for relay aliases (attribution varies every time).
+    party_type      = Column(String, nullable=True)      # "customer" | "employee"
+    party_id        = Column(Integer, nullable=True)
+    party_label     = Column(String, nullable=True)
     alias_type      = Column(String, nullable=False, default="direct")  # "direct" | "relay"
     source          = Column(String, nullable=True)       # e.g. "bankrecon-manual", "bankrecon-seed"
     created_at      = Column(DateTime, default=lambda: datetime.now(IST))

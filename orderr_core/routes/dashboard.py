@@ -397,6 +397,8 @@ def analytics_bankrecon(
     once; the same counterparty auto-fills next time (see bank_categorize.py
     for why this needs three separate matching mechanisms, not one)."""
     from orderr_core.models.bank_transaction import BankTransaction
+    from orderr_core.models.customer import Customer
+    from orderr_core.models.employee import Employee
     from orderr_core.services import bank_categorize
 
     q = db.query(BankTransaction)
@@ -420,10 +422,26 @@ def analytics_bankrecon(
             "confidence": (sug["confidence"] if sug else ("saved" if r.reviewed else "none")),
             "is_relay": bool(sug and sug.get("is_relay")),
             "counterparty_key": (sug["counterparty_key"] if sug else r.counterparty_key) or "",
+            "party_type": r.party_type or (sug["party_type"] if sug else None) or "",
+            "party_id": r.party_id or (sug["party_id"] if sug else None) or "",
+            "party_label": r.party_label or (sug["party_label"] if sug else None) or "",
             "reviewed": r.reviewed,
         })
 
     pending_count = db.query(BankTransaction).filter(BankTransaction.reviewed == False).count()  # noqa: E712
+
+    # Full party list embedded once for client-side search — same pattern as
+    # dashboard.html's customer search (fetch/embed once, filter in-browser),
+    # since the whole list is at most a few hundred rows.
+    customers = (db.query(Customer.id, Customer.restaurant_name, Customer.phone_number)
+                 .filter(Customer.is_active == True).order_by(Customer.restaurant_name).all())  # noqa: E712
+    employees = (db.query(Employee.id, Employee.name)
+                 .filter(Employee.active == True).order_by(Employee.name).all())  # noqa: E712
+    parties = (
+        [{"type": "customer", "id": c.id, "label": c.restaurant_name,
+          "sub": c.phone_number or ""} for c in customers]
+        + [{"type": "employee", "id": e.id, "label": e.name, "sub": "employee"} for e in employees]
+    )
 
     return templates.TemplateResponse(
         request=request,
@@ -439,6 +457,7 @@ def analytics_bankrecon(
             "pending_count": pending_count,
             "categories": bank_categorize.CATEGORIES,
             "quick_pick_hotels": bank_categorize.QUICK_PICK_HOTELS,
+            "parties_json": json.dumps(parties),
             "analytics_view": "bankrecon",
         },
     )
@@ -470,12 +489,19 @@ async def analytics_bankrecon_categorize(
     remark = body.get("remark")
     save_alias = bool(body.get("save_alias"))
     alias_type = body.get("alias_type") or "direct"
-    counterparty_key = body.get("counterparty_key")
+    party_type = body.get("party_type") or None
+    party_id_raw = body.get("party_id")
+    try:
+        party_id = int(party_id_raw) if party_id_raw not in (None, "") else None
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="party_id must be an integer.")
+    party_label = body.get("party_label") or None
 
     try:
         updated = bank_categorize.apply_categorization(
             db, ids, category, remark, reviewed_by=username,
-            save_alias=save_alias, alias_type=alias_type, counterparty_key=counterparty_key,
+            save_alias=save_alias, alias_type=alias_type,
+            party_type=party_type, party_id=party_id, party_label=party_label,
         )
     except ValueError as e:
         db.rollback()

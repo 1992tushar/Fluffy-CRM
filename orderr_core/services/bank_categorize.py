@@ -166,12 +166,14 @@ def suggest_category(db: Session, txn: BankTransaction) -> dict:
                     "source": "relay", "is_relay": True,
                     "txn_type": parsed["txn_type"], "counterparty_raw": parsed["counterparty_raw"],
                     "counterparty_key": key,
+                    "party_type": None, "party_id": None, "party_label": None,
                 }
             return {
                 "category": alias.category, "remark": alias.remark_template, "confidence": "high",
                 "source": "alias", "is_relay": False,
                 "txn_type": parsed["txn_type"], "counterparty_raw": parsed["counterparty_raw"],
                 "counterparty_key": key,
+                "party_type": alias.party_type, "party_id": alias.party_id, "party_label": alias.party_label,
             }
 
     kw_cat = _keyword_category(txn.description)
@@ -180,23 +182,29 @@ def suggest_category(db: Session, txn: BankTransaction) -> dict:
             "category": kw_cat, "remark": None, "confidence": "medium", "source": "keyword",
             "is_relay": False, "txn_type": parsed["txn_type"],
             "counterparty_raw": parsed["counterparty_raw"], "counterparty_key": key or None,
+            "party_type": None, "party_id": None, "party_label": None,
         }
 
     return {
         "category": None, "remark": None, "confidence": "none", "source": "manual",
         "is_relay": False, "txn_type": parsed["txn_type"],
         "counterparty_raw": parsed["counterparty_raw"], "counterparty_key": key or None,
+        "party_type": None, "party_id": None, "party_label": None,
     }
 
 
 def apply_categorization(
     db: Session, txn_ids: list, category: str, remark: Optional[str], reviewed_by: str,
-    save_alias: bool = False, alias_type: str = "direct", counterparty_key: Optional[str] = None,
+    save_alias: bool = False, alias_type: str = "direct",
+    party_type: Optional[str] = None, party_id: Optional[int] = None, party_label: Optional[str] = None,
 ) -> int:
-    """Persist a category+remark to one or more transactions, and optionally
-    teach the alias table so the same counterparty auto-fills next time."""
+    """Persist a category+remark(+party link) to one or more transactions, and
+    optionally teach the alias table so the same counterparty auto-fills next
+    time — including which ledger party it belongs to."""
     if category and category not in CATEGORY_KEYS:
         raise ValueError(f"Unknown category '{category}'")
+    if party_type and party_type not in ("customer", "employee"):
+        raise ValueError(f"Unknown party_type '{party_type}'")
     now = datetime.now(IST)
     rows = db.query(BankTransaction).filter(BankTransaction.id.in_(txn_ids)).all()
     if not rows:
@@ -204,6 +212,9 @@ def apply_categorization(
     for row in rows:
         row.category = category or None
         row.remark = remark or None
+        row.party_type = party_type or None
+        row.party_id = party_id or None
+        row.party_label = party_label or None
         row.reviewed = True
         row.reviewed_by = reviewed_by
         row.reviewed_at = now
@@ -213,7 +224,13 @@ def apply_categorization(
         row.counterparty_key = _norm(parsed["counterparty_raw"]) or None
 
     if save_alias:
-        key = counterparty_key or (rows[0].counterparty_key if rows else None)
+        # Always derive the alias key from the row's own freshly-parsed
+        # narration (set just above) — the UI's "apply to matching rows"
+        # selection is a client-side-only concept and must never decide
+        # where the alias actually gets written, or a stale/mismatched key
+        # would silently save the alias somewhere suggest_category() can
+        # never find it again.
+        key = rows[0].counterparty_key if rows else None
         if key:
             alias = db.query(BankCounterpartyAlias).filter_by(alias_key=key).first()
             if not alias:
@@ -221,6 +238,9 @@ def apply_categorization(
                 db.add(alias)
             alias.category = category if alias_type == "direct" else None
             alias.remark_template = remark if alias_type == "direct" else None
+            alias.party_type = party_type if alias_type == "direct" else None
+            alias.party_id = party_id if alias_type == "direct" else None
+            alias.party_label = party_label if alias_type == "direct" else None
             alias.alias_type = alias_type
             alias.updated_at = now
 

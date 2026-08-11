@@ -336,6 +336,7 @@ def _ensure_bank_transaction_categorize_columns():
             ("txn_type", "VARCHAR"), ("counterparty_raw", "VARCHAR"),
             ("counterparty_key", "VARCHAR"), ("category", "VARCHAR"),
             ("remark", "TEXT"), ("reviewed_by", "VARCHAR"), ("reviewed_at", ts_type),
+            ("party_type", "VARCHAR"), ("party_id", "INTEGER"), ("party_label", "VARCHAR"),
         ):
             if col not in cols:
                 conn.execute(text(f"ALTER TABLE bank_transactions ADD COLUMN {col} {coltype}"))
@@ -347,6 +348,27 @@ def _ensure_bank_transaction_categorize_columns():
 
 
 _ensure_bank_transaction_categorize_columns()
+
+
+def _ensure_bank_counterparty_alias_party_columns():
+    """Add party_type/party_id/party_label to a pre-existing
+    bank_counterparty_aliases table if missing. Idempotent."""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    if "bank_counterparty_aliases" not in insp.get_table_names():
+        return  # fresh DB — create_all already made the current schema
+    cols = {c["name"] for c in insp.get_columns("bank_counterparty_aliases")}
+    with engine.begin() as conn:
+        for col, coltype in (
+            ("party_type", "VARCHAR"), ("party_id", "INTEGER"), ("party_label", "VARCHAR"),
+        ):
+            if col not in cols:
+                conn.execute(text(f"ALTER TABLE bank_counterparty_aliases ADD COLUMN {col} {coltype}"))
+                print(f"Migration: added bank_counterparty_aliases.{col} column")
+
+
+_ensure_bank_counterparty_alias_party_columns()
 
 
 def _seed_bank_counterparty_aliases():

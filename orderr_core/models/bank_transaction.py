@@ -44,6 +44,12 @@ class BankTransaction(Base):
     counterparty_key: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
     category: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     remark: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Which ledger party this transaction belongs to — e.g. the actual Customer
+    # record for "NIRRVANNA RESTAURANT", not just the category. party_label is
+    # denormalized (cached at tag time) so the screen never needs a join.
+    party_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)   # "customer" | "employee"
+    party_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    party_label: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     reviewed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     reviewed_by: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

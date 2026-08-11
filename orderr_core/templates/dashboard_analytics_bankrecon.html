@@ -65,6 +65,19 @@ input.remark{font-size:12px;padding:5px 8px;border:1px solid var(--border-strong
 .upload button{font-size:12px;font-weight:700;color:#fff;background:var(--green);border:1px solid var(--green);padding:7px 14px;border-radius:8px;cursor:pointer}
 .upload button:hover{opacity:.9}
 .upload .hint{font-size:11px;color:var(--ink3)}
+.party-wrap{position:relative;width:170px}
+input.party-search{font-size:12px;padding:5px 8px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);color:var(--ink);width:100%}
+input.party-search.linked{border-color:var(--green-border);background:var(--green-bg);color:var(--green);font-weight:600}
+.party-list{position:absolute;top:100%;left:0;z-index:20;width:260px;max-height:220px;overflow-y:auto;background:var(--surface);border:1px solid var(--border-strong);border-radius:8px;box-shadow:var(--shadow);margin-top:2px;display:none}
+.party-list.open{display:block}
+.party-opt{padding:6px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border)}
+.party-opt:last-child{border-bottom:none}
+.party-opt:hover{background:var(--green-bg)}
+.party-opt .sub{font-size:10px;color:var(--ink3)}
+.party-opt.empty{color:var(--ink3);cursor:default}
+.party-opt.empty:hover{background:none}
+.party-clear{font-size:10px;color:var(--red);background:none;border:none;cursor:pointer;padding:0;margin-top:2px;display:none}
+.party-clear.show{display:inline}
 </style>
 </head>
 <body>
@@ -122,12 +135,14 @@ input.remark{font-size:12px;padding:5px 8px;border:1px solid var(--border-strong
         <th>Description</th>
         <th class="num">Amount</th>
         <th>Category</th>
+        <th>Party</th>
         <th>Remark</th>
         <th>Save</th>
       </tr></thead>
       <tbody id="body">
       {% for t in txns %}
-        <tr class="{{ t.direction }}" data-id="{{ t.id }}" data-cpkey="{{ t.counterparty_key }}" data-relay="{{ '1' if t.is_relay else '0' }}">
+        <tr class="{{ t.direction }}" data-id="{{ t.id }}" data-cpkey="{{ t.counterparty_key }}" data-relay="{{ '1' if t.is_relay else '0' }}"
+            data-party-type="{{ t.party_type }}" data-party-id="{{ t.party_id }}" data-party-label="{{ t.party_label }}">
           <td>{{ t.value_date }}</td>
           <td class="desc" title="{{ t.description }}">{{ t.description }}</td>
           <td class="num">{{ '+' if t.direction=='cr' else '-' }}{{ t.amount }}</td>
@@ -152,6 +167,19 @@ input.remark{font-size:12px;padding:5px 8px;border:1px solid var(--border-strong
                   <span class="badge none">manual</span>
                 {% endif %}
               </div>
+            {% endif %}
+          </td>
+          <td>
+            {% if t.reviewed %}
+              {{ t.party_label or '—' }}
+            {% else %}
+            <div class="party-wrap">
+              <input class="party-search {{ 'linked' if t.party_label else '' }}" type="text" autocomplete="off" placeholder="search party…"
+                     value="{{ t.party_label or '' }}"
+                     oninput="partySearch(this)" onfocus="partySearch(this)">
+              <div class="party-list"></div>
+            </div>
+            <button type="button" class="party-clear {{ 'show' if t.party_label else '' }}" onclick="partyClear(this)">✕ clear</button>
             {% endif %}
           </td>
           <td>
@@ -182,20 +210,90 @@ input.remark{font-size:12px;padding:5px 8px;border:1px solid var(--border-strong
 </main>
 
 <script>
+const ALL_PARTIES = {{ parties_json | safe }};
+
 function quickPick(btn, hotel){
   const tr = btn.closest('tr');
   tr.querySelector('select.cat').value = 'customer_payment';
   tr.querySelector('input.remark').value = 'Received from ' + hotel + ' Customer';
   const cb = tr.querySelector('.remembercb');
   if (cb) cb.checked = false; // never alias a scanner-walkin payer — no repeat signal to learn
+  // best-effort: if a customer of this exact name exists, link it too (still no alias saved)
+  const match = ALL_PARTIES.find(p => p.type === 'customer' && p.label.toLowerCase() === hotel.toLowerCase());
+  if (match) setParty(tr, match);
 }
 
-async function postCategorize(ids, category, remark, saveAlias, counterpartyKey){
+function setParty(tr, p){
+  tr.setAttribute('data-party-type', p.type);
+  tr.setAttribute('data-party-id', p.id);
+  tr.setAttribute('data-party-label', p.label);
+  const input = tr.querySelector('input.party-search');
+  input.value = p.label;
+  input.classList.add('linked');
+  const list = tr.querySelector('.party-list');
+  list.classList.remove('open');
+  list.innerHTML = '';
+  const clearBtn = tr.querySelector('.party-clear');
+  if (clearBtn) clearBtn.classList.add('show');
+}
+
+function partyClear(btn){
+  const tr = btn.closest('tr');
+  tr.setAttribute('data-party-type', '');
+  tr.setAttribute('data-party-id', '');
+  tr.setAttribute('data-party-label', '');
+  const input = tr.querySelector('input.party-search');
+  input.value = '';
+  input.classList.remove('linked');
+  btn.classList.remove('show');
+}
+
+function partySearch(input){
+  const tr = input.closest('tr');
+  const list = tr.querySelector('.party-list');
+  input.classList.remove('linked');
+  const term = input.value.trim().toLowerCase();
+  if (!term){ list.classList.remove('open'); list.innerHTML = ''; return; }
+  const hits = ALL_PARTIES.filter(p => p.label.toLowerCase().includes(term) || (p.sub || '').toLowerCase().includes(term)).slice(0, 20);
+  list.innerHTML = '';
+  if (!hits.length){
+    const d = document.createElement('div');
+    d.className = 'party-opt empty';
+    d.textContent = 'No match';
+    list.appendChild(d);
+  } else {
+    hits.forEach(p => {
+      const d = document.createElement('div');
+      d.className = 'party-opt';
+      d.innerHTML = (p.type === 'employee' ? '🧑 ' : '🏨 ') + p.label + '<div class="sub">' + (p.sub || '') + '</div>';
+      d.onclick = () => setParty(tr, p);
+      list.appendChild(d);
+    });
+  }
+  list.classList.add('open');
+}
+
+document.addEventListener('click', function(e){
+  if (!e.target.closest('.party-wrap')) {
+    document.querySelectorAll('.party-list.open').forEach(l => l.classList.remove('open'));
+  }
+});
+
+function currentParty(tr){
+  return {
+    party_type: tr.getAttribute('data-party-type') || null,
+    party_id: tr.getAttribute('data-party-id') || null,
+    party_label: tr.getAttribute('data-party-label') || null,
+  };
+}
+
+async function postCategorize(ids, category, remark, saveAlias, counterpartyKey, party){
   const r = await fetch('/dashboard/analytics/bankrecon/categorize', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({ids: ids, category: category, remark: remark,
                           save_alias: saveAlias, alias_type: 'direct',
-                          counterparty_key: counterpartyKey})
+                          counterparty_key: counterpartyKey,
+                          party_type: party.party_type, party_id: party.party_id, party_label: party.party_label})
   });
   const j = await r.json();
   if (!r.ok) throw new Error(j.detail || 'save failed');
@@ -211,7 +309,7 @@ async function saveRow(btn){
   const saveAlias = cb ? cb.checked : false;
   btn.disabled = true; btn.textContent = 'Saving…';
   try{
-    await postCategorize([tr.getAttribute('data-id')], category, remark, saveAlias, tr.getAttribute('data-cpkey'));
+    await postCategorize([tr.getAttribute('data-id')], category, remark, saveAlias, tr.getAttribute('data-cpkey'), currentParty(tr));
     tr.style.opacity = '.5';
     tr.querySelectorAll('select,input,button').forEach(el => el.disabled = true);
     btn.textContent = '✓ Saved';
@@ -232,7 +330,7 @@ async function applyToMatching(btn){
   if (!confirm('Apply "' + category + '" / "' + remark + '" to all ' + matches.length + ' pending row(s) from this counterparty?')) return;
   const ids = matches.map(r => r.getAttribute('data-id'));
   try{
-    await postCategorize(ids, category, remark, true, key);
+    await postCategorize(ids, category, remark, true, key, currentParty(tr));
     matches.forEach(r => {
       r.style.opacity = '.5';
       r.querySelectorAll('select,input,button').forEach(el => el.disabled = true);
