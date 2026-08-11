@@ -48,6 +48,7 @@ input.remark{font-size:12px;padding:5px 8px;border:1px solid var(--border-strong
 .badge.medium{background:var(--amber-bg);color:var(--amber)}
 .badge.relay{background:var(--red-bg);color:var(--red)}
 .badge.none{background:var(--bg);color:var(--ink3)}
+.badge.saved{background:var(--green-bg);color:var(--green)}
 .qp{display:inline-flex;gap:4px;margin-left:6px}
 .qp button{font-size:10px;padding:2px 7px;border-radius:5px;border:1px solid var(--blue-border);background:var(--blue-bg);color:var(--blue);cursor:pointer}
 .qp button:hover{background:var(--blue);color:#fff}
@@ -147,9 +148,6 @@ input.party-search.linked{border-color:var(--green-border);background:var(--gree
           <td class="desc" title="{{ t.description }}">{{ t.description }}</td>
           <td class="num">{{ '+' if t.direction=='cr' else '-' }}{{ t.amount }}</td>
           <td>
-            {% if t.reviewed %}
-              <span class="saved">✓ {{ t.category }}</span>
-            {% else %}
               <select class="cat">
                 <option value="">— pick category —</option>
                 {% for key, label, grp in categories %}
@@ -157,7 +155,9 @@ input.party-search.linked{border-color:var(--green-border);background:var(--gree
                 {% endfor %}
               </select>
               <div>
-                {% if t.is_relay %}
+                {% if t.reviewed %}
+                  <span class="badge saved">✓ reviewed</span>
+                {% elif t.is_relay %}
                   <span class="badge relay">Relay — always manual</span>
                 {% elif t.confidence=='high' %}
                   <span class="badge high">learned</span>
@@ -167,12 +167,8 @@ input.party-search.linked{border-color:var(--green-border);background:var(--gree
                   <span class="badge none">manual</span>
                 {% endif %}
               </div>
-            {% endif %}
           </td>
           <td>
-            {% if t.reviewed %}
-              {{ t.party_label or '—' }}
-            {% else %}
             <div class="party-wrap">
               <input class="party-search {{ 'linked' if t.party_label else '' }}" type="text" autocomplete="off" placeholder="search party…"
                      value="{{ t.party_label or '' }}"
@@ -180,10 +176,8 @@ input.party-search.linked{border-color:var(--green-border);background:var(--gree
               <div class="party-list"></div>
             </div>
             <button type="button" class="party-clear {{ 'show' if t.party_label else '' }}" onclick="partyClear(this)">✕ clear</button>
-            {% endif %}
           </td>
           <td>
-            {% if not t.reviewed %}
             <input class="remark" type="text" value="{{ t.remark or '' }}" placeholder="remark">
             <div class="qp">
               {% for h in quick_pick_hotels %}
@@ -191,15 +185,12 @@ input.party-search.linked{border-color:var(--green-border);background:var(--gree
               {% endfor %}
             </div>
             {% if t.counterparty_key and not t.is_relay %}
-            <label class="remember"><input type="checkbox" class="remembercb" checked> remember for next time</label>
+            <label class="remember"><input type="checkbox" class="remembercb" {{ 'checked' if not t.reviewed else '' }}> remember for next time</label>
             <button type="button" class="applyall" onclick="applyToMatching(this)">apply to all rows from this counterparty</button>
-            {% endif %}
             {% endif %}
           </td>
           <td>
-            {% if not t.reviewed %}
-            <button class="rowsave" onclick="saveRow(this)">Save</button>
-            {% endif %}
+            <button class="rowsave" onclick="saveRow(this)">{{ 'Update' if t.reviewed else 'Save' }}</button>
           </td>
         </tr>
       {% endfor %}
