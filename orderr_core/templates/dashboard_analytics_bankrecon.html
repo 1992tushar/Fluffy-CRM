@@ -58,6 +58,13 @@ input.remark{font-size:12px;padding:5px 8px;border:1px solid var(--border-strong
 .saved{font-size:11px;font-weight:700;color:var(--green)}
 .empty{color:var(--green);text-align:center;padding:26px;font-weight:600}
 .applyall{font-size:10px;color:var(--blue);background:none;border:none;cursor:pointer;text-decoration:underline;padding:0;margin-top:3px;display:block}
+.flash{font-size:12.5px;font-weight:600;color:var(--green);background:var(--green-bg);border:1px solid var(--green-border);border-radius:8px;padding:9px 14px;margin-bottom:12px}
+.upload{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:12px 14px;margin-bottom:14px}
+.upload label{font-size:12px;font-weight:600;color:var(--ink2)}
+.upload input[type=file]{font-size:12px}
+.upload button{font-size:12px;font-weight:700;color:#fff;background:var(--green);border:1px solid var(--green);padding:7px 14px;border-radius:8px;cursor:pointer}
+.upload button:hover{opacity:.9}
+.upload .hint{font-size:11px;color:var(--ink3)}
 </style>
 </head>
 <body>
@@ -75,6 +82,21 @@ input.remark{font-size:12px;padding:5px 8px;border:1px solid var(--border-strong
     <div class="section-title">🏦 Bank recon — daily transaction categorization</div>
     <div class="section-sub">{{ pending_count }} pending row(s)</div>
   </div>
+
+  {% if flash == 'bank_ok' %}
+  <div class="flash">✓ Imported {{ created }} new transaction(s){% if skipped %}, skipped {{ skipped }} already-seen{% endif %}.</div>
+  {% elif flash == 'bank_err' %}
+  <div class="flash" style="background:var(--red-bg);border-color:var(--red-border);color:var(--red)">Couldn't read that file — make sure it's the bank statement CSV export.</div>
+  {% elif flash == 'bank_badtype' %}
+  <div class="flash" style="background:var(--red-bg);border-color:var(--red-border);color:var(--red)">Please upload a <b>.csv</b> bank statement.</div>
+  {% endif %}
+
+  <form class="upload" method="post" action="/dashboard/analytics/bankrecon/upload" enctype="multipart/form-data">
+    <label>Upload bank statement</label>
+    <input type="file" name="file" accept=".csv" required>
+    <button type="submit">Upload</button>
+    <span class="hint">Any date range — already-seen transactions are skipped automatically, only new ones get added.</span>
+  </form>
 
   <div class="note">
     Tag each row's category + remark once — a repeat counterparty (a vendor, a regular customer, the PhonePe

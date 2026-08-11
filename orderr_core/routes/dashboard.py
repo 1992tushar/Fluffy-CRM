@@ -357,10 +357,39 @@ async def analytics_close_bank_upload(
     return RedirectResponse(url=url, status_code=303)
 
 
+@router.post("/analytics/bankrecon/upload")
+async def analytics_bankrecon_upload(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    username: str = Depends(require_auth),
+):
+    """Upload a bank-statement CSV straight from the Bank recon screen — no
+    date window needed. Any date range is fine; import is deduped on
+    (value_date, ref, amount, direction), so uploading overlapping or
+    out-of-order statements only ever adds the transactions not seen before."""
+    from orderr_core.services import bank_import
+
+    fname = (file.filename or "").lower()
+    if not fname.endswith(".csv"):
+        return RedirectResponse(
+            url="/dashboard/analytics/bankrecon?flash=bank_badtype", status_code=303)
+    contents = await file.read()
+    try:
+        result = bank_import.import_bank_statement(db, contents, source_file=file.filename)
+    except ValueError:
+        return RedirectResponse(url="/dashboard/analytics/bankrecon?flash=bank_err", status_code=303)
+    url = (f"/dashboard/analytics/bankrecon?flash=bank_ok"
+           f"&created={result['created']}&skipped={result['skipped_duplicates']}")
+    return RedirectResponse(url=url, status_code=303)
+
+
 @router.get("/analytics/bankrecon", response_class=HTMLResponse)
 def analytics_bankrecon(
     request: Request,
     show: str = Query(default="pending", description="pending | reviewed | all"),
+    flash: str = Query(default=None, description="post-upload confirmation"),
+    created: int = Query(default=None),
+    skipped: int = Query(default=None),
     db: Session = Depends(get_db),
     username: str = Depends(require_auth),
 ):
@@ -404,6 +433,9 @@ def analytics_bankrecon(
             "current_time": datetime.now(IST).strftime("%d %b %Y, %I:%M %p"),
             "txns": txns,
             "show": show,
+            "flash": flash,
+            "created": created,
+            "skipped": skipped,
             "pending_count": pending_count,
             "categories": bank_categorize.CATEGORIES,
             "quick_pick_hotels": bank_categorize.QUICK_PICK_HOTELS,
