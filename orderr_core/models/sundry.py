@@ -46,6 +46,11 @@ class SundryPurchase(Base):
     vendor: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     paid_via: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # cash | bank | other
     note: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # optional invoice photo/PDF — stored in the dedicated Drive account, not in
+    # this DB, so only the pointer (file id + shareable link) lives here.
+    invoice_drive_file_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    invoice_drive_link: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    invoice_filename: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

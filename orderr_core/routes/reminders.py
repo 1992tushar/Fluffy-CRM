@@ -5,7 +5,9 @@ REGISTERS_REMINDERS_REQUIREMENTS.md.
 """
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Request, HTTPException
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Request, HTTPException, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
@@ -53,13 +55,31 @@ def _ok_or_400(err):
 
 @router.post("/reminders/sundry")
 async def reminders_add_sundry(
-    request: Request,
+    item_name: str = Form(""),
+    amount: str = Form(""),
+    purchase_date: str = Form(""),
+    category: str = Form(""),
+    qty: str = Form(""),
+    unit: str = Form(""),
+    rate: str = Form(""),
+    vendor: str = Form(""),
+    paid_via: str = Form(""),
+    note: str = Form(""),
+    invoice: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     username: str = Depends(require_auth),
 ):
-    body = await request.json()
+    body = {
+        "item_name": item_name, "amount": amount, "purchase_date": purchase_date,
+        "category": category, "qty": qty, "unit": unit, "rate": rate,
+        "vendor": vendor, "paid_via": paid_via, "note": note,
+    }
+    invoice_file = None
+    if invoice is not None and invoice.filename:
+        invoice_file = (await invoice.read(), invoice.filename,
+                        invoice.content_type or "application/octet-stream")
     return _ok_or_400(reminders_service.add_sundry_purchase(
-        db, body, get_current_business_date()))
+        db, body, get_current_business_date(), invoice_file=invoice_file))
 
 
 @router.post("/reminders/note")

@@ -27,6 +27,7 @@ from orderr_core.models.critical_note import CriticalNote
 from orderr_core.models.important_date import ImportantDate
 from orderr_core.models.customer import Customer
 from orderr_core.services.analytics_service import fmt_inr
+from orderr_core.services import google_drive
 
 SUNDRY_CATEGORIES = ["cleaning", "packaging", "stationery", "kitchen", "other"]
 DATE_CATEGORIES = ["insurance", "vehicle_service", "license", "amc", "subscription", "other"]
@@ -70,9 +71,13 @@ def _learn_gap(dates: list) -> int | None:
     return round(median(gaps)) if gaps else None
 
 
-def add_sundry_purchase(db: Session, data: dict, today: date):
+def add_sundry_purchase(db: Session, data: dict, today: date, invoice_file: tuple = None):
     """Record a buy; auto-creates the item on first use (30-second capture —
-    only item name + amount are mandatory). Relearns the item's cadence."""
+    only item name + amount are mandatory). Relearns the item's cadence.
+
+    invoice_file, if given, is (bytes, filename, content_type) for an optional
+    invoice photo/PDF — uploaded to the dedicated Google Drive account so
+    only a pointer (not the bytes) lands in this DB."""
     name = (data.get("item_name") or "").strip()
     key = _name_key(name)
     if not key:
@@ -115,11 +120,27 @@ def add_sundry_purchase(db: Session, data: dict, today: date):
         if (data.get("unit") or "").strip() and not item.unit:
             item.unit = data["unit"].strip()
 
+    invoice_drive_file_id = invoice_drive_link = invoice_filename = None
+    if invoice_file:
+        file_bytes, filename, content_type = invoice_file
+        if not google_drive.is_configured():
+            return "Invoice storage isn't set up yet — ask the admin to run the Drive setup script."
+        try:
+            uploaded = google_drive.upload_invoice(file_bytes, filename, content_type)
+        except Exception:
+            return "Couldn't upload the invoice — check the connection and try again."
+        invoice_drive_file_id = uploaded["file_id"]
+        invoice_drive_link = uploaded["view_link"]
+        invoice_filename = filename
+
     db.add(SundryPurchase(
         item_id=item.id, purchase_date=pdate, qty=qty, rate=rate, amount=round(amount, 2),
         vendor=(data.get("vendor") or "").strip() or None,
         paid_via=(data.get("paid_via") or "").strip().lower() or None,
         note=(data.get("note") or "").strip() or None,
+        invoice_drive_file_id=invoice_drive_file_id,
+        invoice_drive_link=invoice_drive_link,
+        invoice_filename=invoice_filename,
     ))
     db.flush()
     dates = [p.purchase_date for p in
@@ -191,6 +212,7 @@ def sundries_overview(db: Session, today: date) -> dict:
         "rate_fmt": fmt_inr(p.rate) if p.rate is not None else "",
         "amount_fmt": fmt_inr(p.amount),
         "vendor": p.vendor or "", "paid_via": p.paid_via or "", "note": p.note or "",
+        "invoice_link": p.invoice_drive_link or "",
     } for p in purchases[:30]]
 
     for p in purchases:

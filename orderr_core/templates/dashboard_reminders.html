@@ -139,6 +139,7 @@ tr:last-child td{border-bottom:none}
         <div><label>Paid via</label>
           <select id="s-paid"><option value="">—</option><option value="cash">Cash</option><option value="bank">Bank</option><option value="other">Other</option></select></div>
         <div class="full"><label>Note</label><input id="s-note" placeholder="optional"></div>
+        <div class="full"><label>Invoice (photo/PDF)</label><input id="s-invoice" type="file" accept="image/*,.pdf"></div>
       </div>
       <div style="margin-top:10px"><button class="btn primary" onclick="addSundry(this)">Save purchase</button></div>
       <div class="err" id="s-err"></div>
@@ -171,12 +172,13 @@ tr:last-child td{border-bottom:none}
     <div class="section-head"><div class="section-title">Recent purchases</div></div>
     <div class="wrap"><div class="scroll">
       <table>
-        <thead><tr><th>Date</th><th>Item</th><th class="num">Qty</th><th class="num">Amount</th><th>Vendor</th><th>Via</th><th>Note</th></tr></thead>
+        <thead><tr><th>Date</th><th>Item</th><th class="num">Qty</th><th class="num">Amount</th><th>Vendor</th><th>Via</th><th>Note</th><th>Invoice</th></tr></thead>
         <tbody>
           {% for p in sundries.recent %}
           <tr><td>{{ p.date }}</td><td>{{ p.item }}</td><td class="num">{{ p.qty or '—' }}</td>
             <td class="num">{{ p.amount_fmt }}{% if p.rate_fmt %} <span class="muted">@{{ p.rate_fmt }}</span>{% endif %}</td>
-            <td>{{ p.vendor or '—' }}</td><td>{{ p.paid_via or '—' }}</td><td class="muted">{{ p.note or '' }}</td></tr>
+            <td>{{ p.vendor or '—' }}</td><td>{{ p.paid_via or '—' }}</td><td class="muted">{{ p.note or '' }}</td>
+            <td>{% if p.invoice_link %}<a href="{{ p.invoice_link }}" target="_blank" rel="noopener">view</a>{% else %}—{% endif %}</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -356,12 +358,31 @@ async function post(url, body, btn, errId){
 }
 const v=id=>document.getElementById(id).value;
 
+async function postForm(url, formData, btn, errId){
+  err(errId,'');
+  if(btn) btn.disabled=true;
+  try{
+    const res=await fetch(url,{method:'POST',body:formData});
+    if(!res.ok){ const j=await res.json().catch(()=>({})); err(errId, j.detail||'Something went wrong.'); if(btn) btn.disabled=false; return false; }
+    return true;
+  }catch(e){ err(errId,'Network error — try again.'); if(btn) btn.disabled=false; return false; }
+}
+
 async function addSundry(btn){
-  if(await post('/dashboard/reminders/sundry',{
-    item_name:v('s-item'), amount:v('s-amount'), purchase_date:v('s-date'),
-    category:v('s-category'), qty:v('s-qty'), unit:v('s-unit'), rate:v('s-rate'),
-    vendor:v('s-vendor'), paid_via:v('s-paid'), note:v('s-note')
-  },btn,'s-err')) location.href='?tab=sundries';
+  const fd = new FormData();
+  fd.append('item_name', v('s-item'));
+  fd.append('amount', v('s-amount'));
+  fd.append('purchase_date', v('s-date'));
+  fd.append('category', v('s-category'));
+  fd.append('qty', v('s-qty'));
+  fd.append('unit', v('s-unit'));
+  fd.append('rate', v('s-rate'));
+  fd.append('vendor', v('s-vendor'));
+  fd.append('paid_via', v('s-paid'));
+  fd.append('note', v('s-note'));
+  const f = document.getElementById('s-invoice').files[0];
+  if(f) fd.append('invoice', f);
+  if(await postForm('/dashboard/reminders/sundry', fd, btn, 's-err')) location.href='?tab=sundries';
 }
 async function addNote(btn){
   if(await post('/dashboard/reminders/note',{

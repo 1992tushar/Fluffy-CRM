@@ -415,6 +415,27 @@ def _seed_bank_counterparty_aliases():
 _seed_bank_counterparty_aliases()
 
 
+def _ensure_sundry_purchase_invoice_columns():
+    """Add sundry_purchases.invoice_drive_file_id/invoice_drive_link/
+    invoice_filename (nullable) to a pre-existing table if missing — powers
+    the optional invoice-photo attachment on the sundries register, stored in
+    the dedicated Google Drive account rather than in this DB. Idempotent."""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    if "sundry_purchases" not in insp.get_table_names():
+        return  # fresh DB — create_all already made the columns
+    cols = {c["name"] for c in insp.get_columns("sundry_purchases")}
+    with engine.begin() as conn:
+        for col in ("invoice_drive_file_id", "invoice_drive_link", "invoice_filename"):
+            if col not in cols:
+                conn.execute(text(f"ALTER TABLE sundry_purchases ADD COLUMN {col} VARCHAR"))
+                print(f"Migration: added sundry_purchases.{col} column")
+
+
+_ensure_sundry_purchase_invoice_columns()
+
+
 from orderr_core.constants import IST
 
 # Track last report time for health check
