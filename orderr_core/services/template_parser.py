@@ -332,28 +332,35 @@ AMBIGUOUS_SKIN_TERMS = [
 #   Pure Gavran Chicken Curry Cut (CH1024556)            (gavran range)
 #   Chicken Liver and Gizzard combo (CH1024577)          (kept Liver & Gizzard separate)
 #   Chicken Curry Cut With Skin (CH1024562, Deactive)    (generic Curry Cut → Without Skin)
+#
+# 2026-08-15: entire Vasy product catalog was deleted and re-added, so every
+# item got a new code (old CH10245xx codes → new 900xxx codes). Re-synced from
+# the "Fluffy Fresh Foods Private Limited (9)" Product List export, 2026-08-16.
+# "Thai Boneless" (FS10246370) and "Supreme Boneless" (CH1024578) were NOT
+# re-added in Vasy yet — left on their old (now-invalid) codes until they are;
+# invoices containing those two items will keep failing until then.
 ERP_ITEMS = {
-    "WS Regular Chicken":       {"erp_code": "CH1024561", "erp_name": "With Skin whole chicken Regular",    "category": "Chicken"},
-    "WS Tandoor Chicken":       {"erp_code": "CH1024560", "erp_name": "With Skin whole chicken Tandoor",    "category": "Chicken"},
-    "W/O Skin Regular Chicken": {"erp_code": "CH1024559", "erp_name": "Without Skin whole chicken Regular", "category": "Chicken"},
-    "W/O Skin Tandoor Chicken": {"erp_code": "CH1024558", "erp_name": "Without Skin whole chicken Tandoor", "category": "Chicken"},
-    "Curry Cut":                {"erp_code": "CH1024563", "erp_name": "Chicken Curry Cut Without Skin",     "category": "Chicken"},
-    "Biryani Cut":              {"erp_code": "CH1024576", "erp_name": "Chicken Biryani Cut",                "category": "Chicken"},
-    "Breast Boneless":          {"erp_code": "CH1024574", "erp_name": "Chicken Breast boneless",            "category": "Chicken"},
-    "Leg Boneless":             {"erp_code": "CH1024557", "erp_name": "Chicken Leg Boneless",               "category": "Chicken"},
+    "WS Regular Chicken":       {"erp_code": "900006", "erp_name": "With Skin whole chicken Regular",    "category": "Chicken"},
+    "WS Tandoor Chicken":       {"erp_code": "900005", "erp_name": "With Skin whole chicken Tandoor",    "category": "Chicken"},
+    "W/O Skin Regular Chicken": {"erp_code": "900004", "erp_name": "Without Skin whole chicken Regular", "category": "Chicken"},
+    "W/O Skin Tandoor Chicken": {"erp_code": "900003", "erp_name": "Without Skin whole chicken Tandoor", "category": "Chicken"},
+    "Curry Cut":                {"erp_code": "900007", "erp_name": "Chicken Curry Cut Without Skin",     "category": "Chicken"},
+    "Biryani Cut":              {"erp_code": "900020", "erp_name": "Chicken Biryani Cut",                "category": "Chicken"},
+    "Breast Boneless":          {"erp_code": "900018", "erp_name": "Chicken Breast boneless",            "category": "Chicken"},
+    "Leg Boneless":             {"erp_code": "900002", "erp_name": "Chicken Leg Boneless",               "category": "Chicken"},
     "Thai Boneless":            {"erp_code": "FS10246370","erp_name": "THAI BONLESS",                       "category": "Chicken"},
     "Supreme Boneless":         {"erp_code": "CH1024578", "erp_name": "Supreme Bonless",                    "category": "Chicken"},
-    "Wings":                    {"erp_code": "CH1024575", "erp_name": "Chicken Wings with Skin",            "category": "Chicken"},
-    "Drumstick":                {"erp_code": "CH1024573", "erp_name": "Chicken Drumstick",                  "category": "Chicken"},
-    "Whole Leg":                {"erp_code": "CH1024572", "erp_name": "Chicken Whole Leg",                  "category": "Chicken"},
-    "Carcass":                  {"erp_code": "CH1024567", "erp_name": "Chicken Carcass",                    "category": "Chicken"},
-    "Chicken Neck":             {"erp_code": "CH1024565", "erp_name": "Chicken Neck",                       "category": "Chicken"},
-    "Chicken Skin":             {"erp_code": "CH1024564", "erp_name": "Chicken Skin",                       "category": "Chicken"},
-    "Chicken Feet":             {"erp_code": "CH1024568", "erp_name": "Chicken Feet",                       "category": "Chicken"},
-    "Chicken Mundi":            {"erp_code": "CH1024566", "erp_name": "Chicken Mundi",                      "category": "Chicken"},
-    "Liver":                    {"erp_code": "CH1024570", "erp_name": "Chicken Liver",                      "category": "Chicken"},
-    "Gizzard":                  {"erp_code": "CH1024569", "erp_name": "Chicken Gizzard",                    "category": "Chicken"},
-    "Kheema":                   {"erp_code": "CH1024571", "erp_name": "Chicken Kheema",                     "category": "Chicken"},
+    "Wings":                    {"erp_code": "900019", "erp_name": "Chicken Wings with Skin",            "category": "Chicken"},
+    "Drumstick":                {"erp_code": "900017", "erp_name": "Chicken Drumstick",                  "category": "Chicken"},
+    "Whole Leg":                {"erp_code": "900016", "erp_name": "Chicken Whole Leg",                  "category": "Chicken"},
+    "Carcass":                  {"erp_code": "900011", "erp_name": "Chicken Carcass",                    "category": "Chicken"},
+    "Chicken Neck":             {"erp_code": "900009", "erp_name": "Chicken Neck",                       "category": "Chicken"},
+    "Chicken Skin":             {"erp_code": "900008", "erp_name": "Chicken Skin",                       "category": "Chicken"},
+    "Chicken Feet":             {"erp_code": "900012", "erp_name": "Chicken Feet",                       "category": "Chicken"},
+    "Chicken Mundi":            {"erp_code": "900010", "erp_name": "Chicken Mundi",                      "category": "Chicken"},
+    "Liver":                    {"erp_code": "900014", "erp_name": "Chicken Liver",                      "category": "Chicken"},
+    "Gizzard":                  {"erp_code": "900013", "erp_name": "Chicken Gizzard",                    "category": "Chicken"},
+    "Kheema":                   {"erp_code": "900015", "erp_name": "Chicken Kheema",                     "category": "Chicken"},
 }
 
 # Safety net: every ERP-mapped name must be a real canonical product, and every
