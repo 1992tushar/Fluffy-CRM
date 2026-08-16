@@ -107,7 +107,13 @@ def import_bank_statement(db: Session, file_bytes: bytes, source_file: str = Non
         desc = str(cell(row, "desc") or "").strip() or None
         bal = float(_to_amount(cell(row, "balance"))) if cell(row, "balance") else None
 
-        key = f"{vdate.isoformat()}|{ref or ''}|{amt:.2f}|{direction}"
+        # ref_no alone isn't always unique: Kotak reuses the same batch/session
+        # ref (e.g. clearing-instrument "NCROUT_..." refs) across multiple
+        # distinct instruments cleared together, which silently collapsed
+        # same-day/same-amount/same-direction transactions into one row.
+        # Folding in description (which carries the actual instrument number)
+        # keeps those distinct.
+        key = f"{vdate.isoformat()}|{ref or ''}|{amt:.2f}|{direction}|{desc or ''}"
         if key in existing:
             skipped += 1
             continue

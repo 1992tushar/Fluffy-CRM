@@ -7,8 +7,11 @@ The bank is the one source that can't be fudged, so this is the check that
 catches money that left/entered the account but was never recorded in Vasy
 (bank charges, missed entries), and timing gaps.
 
-Idempotent on `dedupe_key` (value_date + ref + amount + direction), so
-re-uploading an overlapping statement updates rather than duplicates.
+Idempotent on `dedupe_key` (value_date + ref + amount + direction +
+description), so re-uploading an overlapping statement updates rather than
+duplicates. Description is included because the bank reuses the same ref
+across distinct instruments cleared in one batch (e.g. CLG/NEFT); ref alone
+isn't always unique.
 """
 from datetime import date, datetime
 from typing import Optional
