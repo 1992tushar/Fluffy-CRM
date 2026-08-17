@@ -378,6 +378,51 @@ def get_erp_item(canonical_name: str) -> dict | None:
     return ERP_ITEMS.get(canonical_name)
 
 
+# Item codes these products carried BEFORE the 2026-08-15 Vasy catalog rewrite
+# (and earlier resets going back to 2024). Vasy support confirmed the deleted
+# catalog cannot be restored — historical invoices already posted in Vasy
+# still carry these old codes, so analytics imports (which re-read the whole
+# FY every sync) need them to keep resolving to a clean product name instead
+# of falling back to the report's bare category.
+# Source: Vasy support's raw product-table dump ("78 product all data"), 2026-08-17.
+HISTORICAL_ERP_CODE_ALIASES = {
+    "CH1024561": "WS Regular Chicken",
+    "CH1024560": "WS Tandoor Chicken",
+    "CH1024559": "W/O Skin Regular Chicken",
+    "CH1024558": "W/O Skin Tandoor Chicken",
+    "CH1024563": "Curry Cut",
+    "CH1024576": "Biryani Cut", "102453": "Biryani Cut", "20": "Biryani Cut",
+    "CH1024574": "Breast Boneless", "102459": "Breast Boneless", "18": "Breast Boneless",
+    "CH1024557": "Leg Boneless", "102460": "Leg Boneless", "1": "Leg Boneless",
+    "CH1024575": "Wings",
+    "CH1024573": "Drumstick", "102461": "Drumstick", "17": "Drumstick",
+    "CH1024572": "Whole Leg", "102462": "Whole Leg", "16": "Whole Leg",
+    "CH1024567": "Carcass", "102467": "Carcass", "11": "Carcass",
+    "CH1024565": "Chicken Neck", "102469": "Chicken Neck", "9": "Chicken Neck",
+    "CH1024564": "Chicken Skin", "102470": "Chicken Skin", "8": "Chicken Skin",
+    "CH1024568": "Chicken Feet", "102466": "Chicken Feet", "12": "Chicken Feet",
+    "CH1024566": "Chicken Mundi", "102468": "Chicken Mundi", "10": "Chicken Mundi",
+    "CH1024570": "Liver", "102464": "Liver", "14": "Liver",
+    "CH1024569": "Gizzard", "102465": "Gizzard", "13": "Gizzard",
+    "CH1024571": "Kheema", "102463": "Kheema", "15": "Kheema",
+}
+
+
+def get_erp_name_for_any_code(code: str) -> str | None:
+    """Resolve an item code to its ERP display name across BOTH the current
+    Vasy catalog and the pre-rewrite historical codes above. Use this (not
+    ERP_ITEMS directly) wherever a report line's item code might predate the
+    2026-08-15 catalog rewrite — e.g. importing a full-FY analytics export."""
+    code = (code or "").strip()
+    if not code:
+        return None
+    for item in ERP_ITEMS.values():
+        if item["erp_code"] == code:
+            return item["erp_name"]
+    short = HISTORICAL_ERP_CODE_ALIASES.get(code)
+    return ERP_ITEMS[short]["erp_name"] if short else None
+
+
 def erp_display_name(product: str) -> str:
     """Human-facing display name for a product — the EXACT Vasy ERP item name when
     the product maps to the ERP catalog, else the name unchanged.

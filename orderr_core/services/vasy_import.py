@@ -38,7 +38,7 @@ from orderr_core.models.vasy_supplier_bill import VasySupplierBill
 from orderr_core.services.customer_service import (
     _to_amount, normalize_phone, import_customers_from_xlsx,
 )
-from orderr_core.services.template_parser import ERP_ITEMS
+from orderr_core.services.template_parser import get_erp_name_for_any_code
 
 
 # ── shared helpers ──────────────────────────────────────────────────────────
@@ -119,14 +119,16 @@ def _find_header(ws, required_labels, max_scan=15):
     raise ValueError("Could not locate the header row in the export.")
 
 
+class _ErpCodeToName:
+    """{Vasy erp_code → erp display name}, current catalog + pre-rewrite
+    historical codes (see get_erp_name_for_any_code) — a full-FY re-sync
+    reprocesses invoices from before the 2026-08-15 Vasy catalog rewrite too."""
+    def get(self, code):
+        return get_erp_name_for_any_code(code)
+
+
 def _erp_code_to_name():
-    """{Vasy erp_code → erp display name} from the SKU catalog."""
-    out = {}
-    for _name, item in ERP_ITEMS.items():
-        code = item.get("erp_code")
-        if code:
-            out[str(code).strip()] = item.get("erp_name")
-    return out
+    return _ErpCodeToName()
 
 
 def _build_customer_lookup(db: Session):
