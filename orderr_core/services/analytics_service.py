@@ -180,6 +180,20 @@ def _vasy_revenue_by_customer(db: Session, start=None, end=None):
     return {cid: float(t) for cid, t in q.group_by(VasyInvoice.customer_id).all()}
 
 
+def _receipts_received_by_customer(db: Session, start=None, end=None):
+    """{customer_id: amount received} from matched customer receipts,
+    optionally bounded by receipt_date in [start, end] — the window-scoped
+    counterpart to _vasy_revenue_by_customer, for the Customer 360 "Received"
+    column."""
+    q = db.query(CustomerReceipt.customer_id, func.coalesce(func.sum(CustomerReceipt.amount), 0)) \
+        .filter(CustomerReceipt.customer_id != None)   # noqa: E711
+    if start is not None:
+        q = q.filter(CustomerReceipt.receipt_date >= start)
+    if end is not None:
+        q = q.filter(CustomerReceipt.receipt_date <= end)
+    return {cid: float(t) for cid, t in q.group_by(CustomerReceipt.customer_id).all()}
+
+
 def _vasy_invoice_dates_by_customer(db: Session, upto: date):
     """{customer_id: [dates asc]} of Vasy invoice dates up to `upto` — the
     billing-activity signal (recency / frequency / cadence)."""
@@ -1863,6 +1877,7 @@ def customer_360(db: Session, today: date, days=30) -> dict:
 
     # revenue + invoice count by customer within window (Vasy = revenue truth)
     revenue = _vasy_revenue_by_customer(db, window_start, today)
+    received_win = _receipts_received_by_customer(db, window_start, today)
     vc_q = db.query(VasyInvoice.customer_id, func.count(VasyInvoice.id)).filter(
         VasyInvoice.customer_id != None, VasyInvoice.invoice_date <= today)  # noqa: E711
     if window_start:
@@ -1941,6 +1956,8 @@ def customer_360(db: Session, today: date, days=30) -> dict:
             "is_active": bool(c.is_active),
             "revenue": rev,
             "revenue_fmt": fmt_inr(rev),
+            "received": round(received_win.get(c.id, 0.0), 2),
+            "received_fmt": fmt_inr(received_win.get(c.id, 0.0)),
             "orders": n_orders,
             "last_order": last.strftime("%Y-%m-%d") if last else "",
             "recency_days": recency_days if recency_days is not None else "",

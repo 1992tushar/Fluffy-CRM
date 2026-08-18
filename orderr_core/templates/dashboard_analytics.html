@@ -242,9 +242,8 @@ tr.detail td{background:var(--bg);padding:14px 18px}
         <thead>
           <tr>
             <th data-sort="name">Customer</th>
-            <th data-sort="area">Area</th>
-            <th data-sort="salesperson">Sales</th>
-            <th data-sort="revenue" class="num">Revenue ({{ c360.window_label }})</th>
+            <th data-sort="revenue" class="num">Sales ({{ c360.window_label }})</th>
+            <th data-sort="received" class="num">Received ({{ c360.window_label }})</th>
             <th data-sort="outstanding" class="num">Outstanding</th>
             <th data-sort="recency_days" class="num">Last invoice</th>
             <th data-sort="days_since_payment" class="num">Last payment</th>
@@ -306,7 +305,7 @@ function renderC360(){
     exp.href = '/dashboard/analytics/export/customers?' + p.toString();
   }
 
-  const numeric = (sortKey === 'revenue' || sortKey === 'outstanding' || sortKey === 'recency_days' || sortKey === 'days_since_payment');
+  const numeric = (sortKey === 'revenue' || sortKey === 'received' || sortKey === 'outstanding' || sortKey === 'recency_days' || sortKey === 'days_since_payment');
   rows.sort((a,b) => {
     let x = a[sortKey], y = b[sortKey];
     if (numeric){
@@ -318,7 +317,7 @@ function renderC360(){
   });
 
   const body = document.getElementById('c360-body');
-  if (!rows.length){ body.innerHTML = '<tr><td colspan="7" class="empty">No customers match.</td></tr>'; }
+  if (!rows.length){ body.innerHTML = '<tr><td colspan="6" class="empty">No customers match.</td></tr>'; }
   else {
     body.innerHTML = rows.map((r,i) => {
       const detailId = 'd'+i;
@@ -326,20 +325,20 @@ function renderC360(){
         '<tr class="row" onclick="toggleDetail(\''+detailId+'\')">' +
           '<td><div class="cust-name">'+escapeHtml(r.name)+'</div>' +
               (r.phone ? '<div class="cust-sub">'+escapeHtml(r.phone)+'</div>' : '<div class="cust-sub" style="color:var(--red)">no phone</div>') + '</td>' +
-          '<td>'+(r.area ? '<span class="chip">'+escapeHtml(r.area)+'</span>' : '<span class="cust-sub">—</span>')+'</td>' +
-          '<td>'+(r.salesperson ? escapeHtml(r.salesperson) : '<span class="cust-sub">—</span>')+'</td>' +
           '<td class="num">'+r.revenue_fmt+'</td>' +
+          '<td class="num">'+r.received_fmt+'</td>' +
           '<td class="num">'+outstandingCell(r)+'</td>' +
           '<td class="num">'+recencyCell(r)+'</td>' +
           '<td class="num">'+paymentCell(r)+'</td>' +
         '</tr>' +
-        '<tr class="detail" id="'+detailId+'" style="display:none"><td colspan="7">' +
+        '<tr class="detail" id="'+detailId+'" style="display:none"><td colspan="6">' +
           '<div class="detail-grid">' +
             '<div><div class="k">Customer</div><div class="v">'+escapeHtml(r.name)+'</div></div>' +
             '<div><div class="k">Phone</div><div class="v">'+escapeHtml(r.phone||'—')+'</div></div>' +
             '<div><div class="k">Area</div><div class="v">'+escapeHtml(r.area||'—')+'</div></div>' +
             '<div><div class="k">Salesperson</div><div class="v">'+escapeHtml(r.salesperson||'—')+'</div></div>' +
-            '<div><div class="k">Revenue</div><div class="v">'+r.revenue_fmt+'</div></div>' +
+            '<div><div class="k">Sales</div><div class="v">'+r.revenue_fmt+'</div></div>' +
+            '<div><div class="k">Received</div><div class="v">'+r.received_fmt+'</div></div>' +
             '<div><div class="k">Invoices</div><div class="v">'+r.orders+'</div></div>' +
             '<div><div class="k">Last invoice</div><div class="v">'+(r.last_order||'never')+'</div></div>' +
             '<div><div class="k">Outstanding</div><div class="v">'+r.outstanding_fmt+'</div></div>' +
