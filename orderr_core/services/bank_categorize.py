@@ -48,6 +48,7 @@ CATEGORIES = [
     ("packaging_consumables", "Packaging & Consumables",               "out"),
     ("employee_salary",       "Employee Salary",                      "out"),
     ("employee_advance",      "Employee Advance",                     "out"),
+    ("employee_food",         "Employee Monthly Food",                "out"),
     ("employee_reimbursement","Employee Reimbursement/Misc",          "out"),
     ("rent",                  "Rent",                                  "out"),
     ("utilities",             "Utilities",                            "out"),
