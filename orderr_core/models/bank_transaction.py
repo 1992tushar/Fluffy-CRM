@@ -61,5 +61,12 @@ class BankTransaction(Base):
     reviewed_by: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Optional supporting bill/receipt photo, stored in the same dedicated
+    # Drive account as sundries invoices (see services/google_drive.py) —
+    # only the pointer lives here, never the file bytes.
+    bill_drive_file_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    bill_drive_link: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    bill_filename: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
     def __repr__(self):
         return f"<BankTxn {self.value_date} {self.direction} {self.amount}>"

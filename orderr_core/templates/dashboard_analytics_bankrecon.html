@@ -152,6 +152,7 @@ input.party-search.linked{border-color:var(--green-border);background:var(--gree
         <th>Category</th>
         <th>Party</th>
         <th>Remark</th>
+        <th>Bill</th>
         <th>Save</th>
       </tr></thead>
       <tbody id="body">
@@ -202,6 +203,12 @@ input.party-search.linked{border-color:var(--green-border);background:var(--gree
             <label class="remember"><input type="checkbox" class="remembercb" {{ 'checked' if not t.reviewed else '' }}> remember for next time</label>
             <button type="button" class="applyall" onclick="applyToMatching(this)">apply to all rows from this counterparty</button>
             {% endif %}
+          </td>
+          <td class="bill-cell">
+            <input type="file" class="bill-file" accept="image/*,.pdf" style="display:none" onchange="uploadBill(this)">
+            <button type="button" class="billbtn" onclick="this.closest('td').querySelector('.bill-file').click()">📎 Upload</button>
+            <a class="bill-link" href="{{ t.bill_drive_link }}" target="_blank" rel="noopener" style="{{ '' if t.bill_drive_link else 'display:none' }}">view</a>
+            <span class="bill-status"></span>
           </td>
           <td>
             <button class="rowsave" onclick="saveRow(this)">{{ 'Update' if t.reviewed else 'Save' }}</button>
@@ -322,6 +329,35 @@ async function saveRow(btn){
   }catch(e){
     alert('Could not save: ' + e.message);
     btn.disabled = false; btn.textContent = 'Save';
+  }
+}
+
+async function uploadBill(input){
+  const tr = input.closest('tr');
+  const file = input.files[0];
+  if (!file) return;
+  const td = input.closest('td');
+  const btn = td.querySelector('.billbtn');
+  const status = td.querySelector('.bill-status');
+  const link = td.querySelector('.bill-link');
+  const fd = new FormData();
+  fd.append('bill', file);
+  btn.disabled = true; status.textContent = 'Uploading…';
+  try{
+    const r = await fetch('/dashboard/analytics/bankrecon/' + tr.getAttribute('data-id') + '/bill', {
+      method: 'POST', body: fd
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || 'upload failed');
+    link.href = j.bill_drive_link;
+    link.style.display = '';
+    status.textContent = '';
+  }catch(e){
+    status.textContent = '';
+    alert('Could not upload bill: ' + e.message);
+  }finally{
+    btn.disabled = false;
+    input.value = '';
   }
 }
 

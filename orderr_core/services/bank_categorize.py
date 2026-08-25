@@ -254,6 +254,29 @@ def apply_categorization(
     return len(rows)
 
 
+def attach_bill(db: Session, txn_id: int, data: bytes, filename: str, mime_type: str) -> Optional[str]:
+    """Upload a supporting bill/receipt for one bank transaction to the
+    dedicated Drive account (same one sundries invoices use) and store the
+    pointer on the row. Returns an error message on failure, or None on
+    success — same contract as reminders_service.add_sundry_purchase."""
+    from orderr_core.services import google_drive
+
+    row = db.query(BankTransaction).filter(BankTransaction.id == txn_id).first()
+    if not row:
+        return "Transaction not found."
+    if not google_drive.is_configured():
+        return "Bill storage isn't set up yet — ask the admin to run the Drive setup script."
+    try:
+        uploaded = google_drive.upload_invoice(data, filename, mime_type)
+    except Exception:
+        return "Couldn't upload the bill — check the connection and try again."
+    row.bill_drive_file_id = uploaded["file_id"]
+    row.bill_drive_link = uploaded["view_link"]
+    row.bill_filename = filename
+    db.commit()
+    return None
+
+
 # ── seed: aliases already confirmed against the owner's actual July data ───
 _SEED_DIRECT = [
     # (counterparty_raw as it appears in narration, category, remark_template)

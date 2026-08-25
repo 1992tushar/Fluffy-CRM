@@ -436,6 +436,8 @@ def analytics_bankrecon(
             "party_id": r.party_id or (sug["party_id"] if sug else None) or "",
             "party_label": r.party_label or (sug["party_label"] if sug else None) or "",
             "reviewed": r.reviewed,
+            "bill_drive_link": r.bill_drive_link or "",
+            "bill_filename": r.bill_filename or "",
         })
 
     pending_count = db.query(BankTransaction).filter(BankTransaction.reviewed == False).count()  # noqa: E712
@@ -536,6 +538,29 @@ async def analytics_bankrecon_categorize(
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
     return JSONResponse({"updated": updated})
+
+
+@router.post("/analytics/bankrecon/{txn_id}/bill")
+async def analytics_bankrecon_bill(
+    txn_id: int,
+    bill: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    username: str = Depends(require_auth),
+):
+    """Attach a supporting bill/receipt photo to one bank transaction —
+    stored in the same dedicated Drive account as sundries invoices."""
+    from orderr_core.models.bank_transaction import BankTransaction
+    from orderr_core.services import bank_categorize
+
+    if not bill.filename:
+        raise HTTPException(status_code=400, detail="No file selected.")
+    data = await bill.read()
+    err = bank_categorize.attach_bill(
+        db, txn_id, data, bill.filename, bill.content_type or "application/octet-stream")
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    row = db.query(BankTransaction).filter_by(id=txn_id).first()
+    return JSONResponse({"bill_drive_link": row.bill_drive_link, "bill_filename": row.bill_filename})
 
 
 @router.get("/analytics/bankrecon/export")

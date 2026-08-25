@@ -436,6 +436,27 @@ def _ensure_sundry_purchase_invoice_columns():
 _ensure_sundry_purchase_invoice_columns()
 
 
+def _ensure_bank_transaction_bill_columns():
+    """Add bank_transactions.bill_drive_file_id/bill_drive_link/bill_filename
+    (nullable) to a pre-existing table if missing — powers the optional
+    supporting-bill attachment on the bank-recon screen, stored in the same
+    dedicated Google Drive account as sundries invoices. Idempotent."""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    if "bank_transactions" not in insp.get_table_names():
+        return  # fresh DB — create_all already made the columns
+    cols = {c["name"] for c in insp.get_columns("bank_transactions")}
+    with engine.begin() as conn:
+        for col in ("bill_drive_file_id", "bill_drive_link", "bill_filename"):
+            if col not in cols:
+                conn.execute(text(f"ALTER TABLE bank_transactions ADD COLUMN {col} VARCHAR"))
+                print(f"Migration: added bank_transactions.{col} column")
+
+
+_ensure_bank_transaction_bill_columns()
+
+
 from orderr_core.constants import IST
 
 # Track last report time for health check
