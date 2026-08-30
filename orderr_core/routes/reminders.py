@@ -84,13 +84,28 @@ async def reminders_add_sundry(
 
 @router.post("/reminders/note")
 async def reminders_add_note(
-    request: Request,
+    note: str = Form(""),
+    amount: str = Form(""),
+    customer_id: str = Form(""),
+    person: str = Form(""),
+    event_date: str = Form(""),
+    follow_up_date: str = Form(""),
+    priority: str = Form(""),
+    attachment: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     username: str = Depends(require_auth),
 ):
-    body = await request.json()
+    body = {
+        "note": note, "amount": amount, "customer_id": customer_id,
+        "person": person, "event_date": event_date,
+        "follow_up_date": follow_up_date, "priority": priority,
+    }
+    attachment_file = None
+    if attachment is not None and attachment.filename:
+        attachment_file = (await attachment.read(), attachment.filename,
+                           attachment.content_type or "application/octet-stream")
     return _ok_or_400(reminders_service.add_note(
-        db, body, get_current_business_date()))
+        db, body, get_current_business_date(), attachment_file=attachment_file))
 
 
 @router.post("/reminders/note/{note_id}/close")

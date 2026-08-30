@@ -234,7 +234,7 @@ def sundries_overview(db: Session, today: date) -> dict:
 
 # ── B · Critical notes ──────────────────────────────────────────────────────
 
-def add_note(db: Session, data: dict, today: date):
+def add_note(db: Session, data: dict, today: date, attachment_file=None):
     text = (data.get("note") or "").strip()
     if not text:
         return "Write the note first."
@@ -254,12 +254,27 @@ def add_note(db: Session, data: dict, today: date):
             return "Invalid customer."
         if db.query(Customer).get(customer_id) is None:
             return "Customer not found."
+    attachment_drive_file_id = attachment_drive_link = attachment_filename = None
+    if attachment_file:
+        file_bytes, filename, content_type = attachment_file
+        if not google_drive.is_configured():
+            return "Attachment storage isn't set up yet — ask the admin to run the Drive setup script."
+        try:
+            uploaded = google_drive.upload_invoice(file_bytes, filename, content_type)
+        except Exception:
+            return "Couldn't upload the attachment — check the connection and try again."
+        attachment_drive_file_id = uploaded["file_id"]
+        attachment_drive_link = uploaded["view_link"]
+        attachment_filename = filename
     db.add(CriticalNote(
         note=text, amount=amount, customer_id=customer_id,
         person=(data.get("person") or "").strip() or None,
         event_date=_parse_date(data.get("event_date")) or today,
         follow_up_date=_parse_date(data.get("follow_up_date")),
         priority="high" if data.get("priority") == "high" else "normal",
+        attachment_drive_file_id=attachment_drive_file_id,
+        attachment_drive_link=attachment_drive_link,
+        attachment_filename=attachment_filename,
     ))
     db.commit()
     return None
@@ -314,6 +329,8 @@ def notes_overview(db: Session, today: date) -> dict:
             "overdue_days": overdue_days,
             "resolution_note": n.resolution_note or "",
             "resolved_at": n.resolved_at.strftime("%d %b %Y") if n.resolved_at else "",
+            "attachment_link": n.attachment_drive_link or "",
+            "attachment_filename": n.attachment_filename or "",
         }
 
     notes = db.query(CriticalNote).order_by(CriticalNote.created_at.desc()).all()

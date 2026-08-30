@@ -457,6 +457,28 @@ def _ensure_bank_transaction_bill_columns():
 _ensure_bank_transaction_bill_columns()
 
 
+def _ensure_critical_note_attachment_columns():
+    """Add critical_notes.attachment_drive_file_id/attachment_drive_link/
+    attachment_filename (nullable) to a pre-existing table if missing —
+    powers the optional attachment on the Reminders notes register, stored
+    in the same dedicated Google Drive account as sundries invoices.
+    Idempotent."""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    if "critical_notes" not in insp.get_table_names():
+        return  # fresh DB — create_all already made the columns
+    cols = {c["name"] for c in insp.get_columns("critical_notes")}
+    with engine.begin() as conn:
+        for col in ("attachment_drive_file_id", "attachment_drive_link", "attachment_filename"):
+            if col not in cols:
+                conn.execute(text(f"ALTER TABLE critical_notes ADD COLUMN {col} VARCHAR"))
+                print(f"Migration: added critical_notes.{col} column")
+
+
+_ensure_critical_note_attachment_columns()
+
+
 from orderr_core.constants import IST
 
 # Track last report time for health check

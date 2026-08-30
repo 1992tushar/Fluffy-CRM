@@ -37,3 +37,9 @@ class CriticalNote(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Optional supporting attachment (photo/PDF), stored in the same dedicated
+    # Drive account as sundries invoices — only the pointer lives here.
+    attachment_drive_file_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    attachment_drive_link: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    attachment_filename: Mapped[Optional[str]] = mapped_column(String, nullable=True)

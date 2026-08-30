@@ -205,6 +205,7 @@ tr:last-child td{border-bottom:none}
         <div><label>Follow up on</label><input id="n-follow" type="date"></div>
         <div><label>Priority</label>
           <select id="n-priority"><option value="normal">Normal</option><option value="high">High</option></select></div>
+        <div><label>Attachment (photo/PDF)</label><input id="n-attachment" type="file" accept="image/*,.pdf"></div>
       </div>
       <div style="margin-top:10px"><button class="btn primary" onclick="addNote(this)">Save note</button></div>
       <div class="err" id="n-err"></div>
@@ -224,6 +225,7 @@ tr:last-child td{border-bottom:none}
         {% elif n.follow_up %}<span class="chip">follow up {{ n.follow_up }}</span>
         {% else %}<span class="chip">no follow-up date</span>{% endif %}
         {% if n.priority == 'high' %}<span class="chip amber">high</span>{% endif %}
+        {% if n.attachment_link %}<span>📎 <a href="{{ n.attachment_link }}" target="_blank" rel="noopener">{{ n.attachment_filename or 'attachment' }}</a></span>{% endif %}
       </div>
       <div class="actions">
         <button class="btn small" onclick="closeNote({{ n.id }},'resolved',this)">✓ Resolve</button>
@@ -241,12 +243,13 @@ tr:last-child td{border-bottom:none}
     <div class="section-head"><div class="section-title">Recently closed</div></div>
     <div class="wrap"><div class="scroll">
       <table>
-        <thead><tr><th>Note</th><th>Outcome</th><th>What happened</th><th>Closed</th></tr></thead>
+        <thead><tr><th>Note</th><th>Outcome</th><th>What happened</th><th>Closed</th><th>Attachment</th></tr></thead>
         <tbody>
           {% for n in notes.closed %}
           <tr><td>{{ n.note }}{% if n.amount_fmt %} <b>{{ n.amount_fmt }}</b>{% endif %}</td>
             <td><span class="chip {{ 'green' if n.status == 'resolved' else '' }}">{{ n.status }}</span></td>
-            <td class="muted">{{ n.resolution_note }}</td><td class="muted">{{ n.resolved_at }}</td></tr>
+            <td class="muted">{{ n.resolution_note }}</td><td class="muted">{{ n.resolved_at }}</td>
+            <td>{% if n.attachment_link %}<a href="{{ n.attachment_link }}" target="_blank" rel="noopener">view</a>{% else %}—{% endif %}</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -385,11 +388,17 @@ async function addSundry(btn){
   if(await postForm('/dashboard/reminders/sundry', fd, btn, 's-err')) location.href='?tab=sundries';
 }
 async function addNote(btn){
-  if(await post('/dashboard/reminders/note',{
-    note:v('n-text'), amount:v('n-amount'), customer_id:v('n-customer'),
-    person:v('n-person'), event_date:v('n-event'), follow_up_date:v('n-follow'),
-    priority:v('n-priority')
-  },btn,'n-err')) location.href='?tab=notes';
+  const fd = new FormData();
+  fd.append('note', v('n-text'));
+  fd.append('amount', v('n-amount'));
+  fd.append('customer_id', v('n-customer'));
+  fd.append('person', v('n-person'));
+  fd.append('event_date', v('n-event'));
+  fd.append('follow_up_date', v('n-follow'));
+  fd.append('priority', v('n-priority'));
+  const f = document.getElementById('n-attachment').files[0];
+  if(f) fd.append('attachment', f);
+  if(await postForm('/dashboard/reminders/note', fd, btn, 'n-err')) location.href='?tab=notes';
 }
 async function closeNote(id,status,btn){
   const what = prompt(status==='resolved' ? 'What happened? (e.g. "recovered ₹20,000 in cash on 12 Jul")'
