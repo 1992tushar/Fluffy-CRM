@@ -92,7 +92,7 @@ tr.row{cursor:pointer} tr.row:hover{background:var(--green-bg)}
         {% for u in rc.unbilled %}
         <tr class="row" onclick="location.href='/dashboard/analytics/customer/{{ u.customer_id }}'">
           <td>{{ u.name }}</td><td>{% if u.area %}<span class="chip">{{ u.area }}</span>{% endif %}</td>
-          <td class="num">{{ u.orders }}</td><td class="num">{{ u.items }}</td>
+          <td class="num">{{ u.orders }}</td><td class="num">{{ u['items'] }}</td>
         </tr>
         {% else %}
         <tr><td colspan="4" class="empty">✓ No unbilled OrdeRR deliveries for this date.</td></tr>
