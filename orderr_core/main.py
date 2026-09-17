@@ -60,6 +60,7 @@ from orderr_core.models.customer_receipt import CustomerReceipt     # noqa: F401
 from orderr_core.models.outstanding_snapshot import OutstandingSnapshot  # noqa: F401
 from orderr_core.models.import_log import ImportLog                 # noqa: F401
 from orderr_core.models.vasy_invoice import VasyInvoice, VasyInvoiceItem  # noqa: F401
+from orderr_core.models.vasy_invoice_history import VasyInvoiceHistory     # noqa: F401
 from orderr_core.models.vasy_purchase import VasyPurchase, VasyPurchaseItem  # noqa: F401
 from orderr_core.models.vasy_expense import VasyExpense                 # noqa: F401
 from orderr_core.models.vasy_payment import VasyPayment                 # noqa: F401

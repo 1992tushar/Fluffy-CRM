@@ -17,7 +17,7 @@ customer_service.import_customers_from_xlsx for the customer/outstanding upsert
 """
 import io
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from difflib import SequenceMatcher
 
 import openpyxl
@@ -31,6 +31,7 @@ from orderr_core.models.customer_receipt import CustomerReceipt
 from orderr_core.models.outstanding_snapshot import OutstandingSnapshot
 from orderr_core.models.import_log import ImportLog
 from orderr_core.models.vasy_invoice import VasyInvoice, VasyInvoiceItem
+from orderr_core.models.vasy_invoice_history import VasyInvoiceHistory
 from orderr_core.models.vasy_purchase import VasyPurchase, VasyPurchaseItem
 from orderr_core.models.vasy_expense import VasyExpense
 from orderr_core.models.vasy_payment import VasyPayment
@@ -656,6 +657,97 @@ def _purge_stale_ledger_rows(db: Session, existing: dict, seen: set, seen_dates:
     return removed
 
 
+def _update_invoice_history(db: Session, vouchers: dict, voucher_cid: dict) -> dict:
+    """Upsert VasyInvoiceHistory from this sync's voucher totals, and flag any
+    voucher that was seen in a prior sync but is missing from this one as
+    disappeared (voucher deleted in Vasy between syncs — the fraud signal).
+    A voucher that reappears in a later sync has disappeared_at cleared.
+
+    Must be called with `vouchers` = this run's freshly parsed voucher totals
+    and BEFORE VasyInvoice is wiped/rebuilt, since this table is the only place
+    that remembers a voucher once the mirror table has moved on.
+    """
+    now = datetime.now(timezone.utc)
+    existing = {h.voucher_no: h for h in db.query(VasyInvoiceHistory).all()}
+
+    for vno, v in vouchers.items():
+        h = existing.get(vno)
+        if h is None:
+            h = VasyInvoiceHistory(voucher_no=vno, first_seen_at=now)
+            db.add(h)
+            existing[vno] = h
+        h.party_name = v["party"] or vno
+        h.party_key = v["party_key"] or ""
+        h.customer_id = voucher_cid.get(vno)
+        h.invoice_date = v["date"]
+        h.total = round(v["total"], 2)
+        h.last_seen_at = now
+        h.disappeared_at = None   # reappeared (or still present) — clear any prior flag
+
+    disappeared = 0
+    for vno, h in existing.items():
+        if vno not in vouchers and h.disappeared_at is None:
+            h.disappeared_at = now
+            disappeared += 1
+
+    return {"disappeared": disappeared}
+
+
+def disappeared_invoices_report(db: Session, days: int = 90) -> list:
+    """Fraud-detection report: invoices that existed in a prior Vasy sync and
+    are missing from the latest one (i.e. deleted in Vasy after the fact).
+
+    For each, checks whether that customer has a recorded receipt of roughly
+    matching size anywhere between the invoice's own date and a few days after
+    it disappeared. A legitimate "invoice corrected/reversed, payment recorded
+    properly" leaves a receipt behind; the fraud pattern this is built to
+    catch (invoice quietly deleted, cash collected off-books) does not.
+    `no_matching_receipt=True` is the flag to investigate, not proven fraud —
+    it just means nothing in the ledger explains where that money went.
+    """
+    from datetime import timedelta
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    rows = (db.query(VasyInvoiceHistory)
+            .filter(VasyInvoiceHistory.disappeared_at.isnot(None))
+            .filter(VasyInvoiceHistory.disappeared_at >= cutoff)
+            .order_by(VasyInvoiceHistory.disappeared_at.desc())
+            .all())
+
+    out = []
+    for h in rows:
+        # Search the invoice's whole lifetime — from when it was raised to a
+        # few days after it was deleted — rather than a narrow window around
+        # the sync timestamp: a legitimate reversal's receipt could be logged
+        # any time between those two events, not necessarily right at either.
+        window_lo = h.invoice_date or (h.disappeared_at.date() - timedelta(days=3))
+        window_hi = h.disappeared_at.date() + timedelta(days=5)
+        receipts_nearby = 0.0
+        if h.customer_id is not None:
+            receipts_nearby = float(db.query(func.coalesce(func.sum(CustomerReceipt.amount), 0))
+                .filter(CustomerReceipt.customer_id == h.customer_id,
+                        CustomerReceipt.receipt_date >= window_lo,
+                        CustomerReceipt.receipt_date <= window_hi)
+                .scalar() or 0)
+        total = float(h.total)
+        out.append({
+            "voucher_no": h.voucher_no,
+            "party_name": h.party_name,
+            "customer_id": h.customer_id,
+            "invoice_date": h.invoice_date,
+            "total": total,
+            "total_fmt": _fmt_inr_local(total),
+            "first_seen_at": h.first_seen_at,
+            "last_seen_at": h.last_seen_at,
+            "disappeared_at": h.disappeared_at,
+            "receipts_nearby": round(receipts_nearby, 2),
+            "receipts_nearby_fmt": _fmt_inr_local(receipts_nearby),
+            # allow a small discount/rounding gap before treating it as unexplained
+            "no_matching_receipt": receipts_nearby < total * 0.9,
+        })
+    return out
+
+
 # ── Sales item register (line-item sales; SKU mix + landing cost) ───────────
 
 def import_sales_items(db: Session, file_bytes: bytes, source_file: str = None) -> dict:
@@ -781,6 +873,11 @@ def import_sales_items(db: Session, file_bytes: bytes, source_file: str = None) 
     if lines:
         db.bulk_insert_mappings(VasySalesItem, lines)
 
+    # ── Fraud-detection audit trail: record every voucher this sync saw, and
+    # flag any voucher present before this sync but missing now (deleted in
+    # Vasy) — captured BEFORE the snapshot-replace below discards that history.
+    history_result = _update_invoice_history(db, vouchers, voucher_cid)
+
     # ── Rebuild VasyInvoice (revenue source of truth) from voucher totals ────
     # Replaces the flaky client-side /sales/invoice export: identical revenue,
     # but sourced from the reliable server-side register.
@@ -807,12 +904,14 @@ def import_sales_items(db: Session, file_bytes: bytes, source_file: str = None) 
     relinked = _backfill_receipt_links(db)
 
     matched = len(vouchers) - unmatched - zero_internal
+    disappeared = history_result["disappeared"]
     db.add(ImportLog(entity="sales_items", source_file=source_file,
                      rows_total=len(lines), created=len(lines), updated=0,
                      unmatched=unmatched,
                      notes=(f"invoices={len(vouchers)}; total_net={round(total_net, 2)}; "
                             f"skus={len(skus)}; auto_created={auto_created}; "
-                            f"zero_internal={zero_internal}; receipts_relinked={relinked}")))
+                            f"zero_internal={zero_internal}; receipts_relinked={relinked}; "
+                            f"disappeared={disappeared}")))
     db.commit()
 
     return {
@@ -828,6 +927,7 @@ def import_sales_items(db: Session, file_bytes: bytes, source_file: str = None) 
         "zero_internal": zero_internal,     # ₹0 internal accounts, expected
         "customers_created": auto_created,
         "receipts_relinked": relinked,
+        "disappeared": disappeared,         # vouchers seen before, missing now — check Invoice Integrity
         "total_fmt": _fmt_inr_local(total_net),
     }
 

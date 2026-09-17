@@ -1272,6 +1272,44 @@ def analytics_imports(
     )
 
 
+@router.get("/analytics/invoice-integrity", response_class=HTMLResponse)
+def analytics_invoice_integrity(
+    request: Request,
+    db: Session = Depends(get_db),
+    username: str = Depends(require_auth),
+):
+    """Fraud-detection report: invoices seen in a prior Vasy sync that are
+    missing from the latest one (deleted in Vasy), each checked against nearby
+    recorded receipts so a reviewer can spot deletions with no matching
+    payment on record."""
+    from orderr_core.services import vasy_import
+
+    rows = vasy_import.disappeared_invoices_report(db)
+    formatted = [{
+        "voucher_no": r["voucher_no"],
+        "party_name": r["party_name"],
+        "customer_id": r["customer_id"],
+        "invoice_date": r["invoice_date"].strftime("%d %b %Y") if r["invoice_date"] else "",
+        "total_fmt": r["total_fmt"],
+        "disappeared_at": r["disappeared_at"].astimezone(IST).strftime("%d %b %Y %I:%M %p") if r["disappeared_at"] else "",
+        "receipts_nearby_fmt": r["receipts_nearby_fmt"],
+        "no_matching_receipt": r["no_matching_receipt"],
+    } for r in rows]
+    flagged = sum(1 for r in formatted if r["no_matching_receipt"])
+
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard_analytics_invoice_integrity.html",
+        context={
+            "plant_name": PLANT_NAME,
+            "current_time": datetime.now(IST).strftime("%d %b %Y, %I:%M %p"),
+            "rows": formatted,
+            "flagged": flagged,
+            "analytics_view": "invoice_integrity",
+        },
+    )
+
+
 @router.post("/analytics/import/receipts")
 async def analytics_import_receipts(
     file: UploadFile = File(...),

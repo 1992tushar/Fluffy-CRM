@@ -42,6 +42,7 @@ CLEAR_TABLES = [
     # Vasy analytics mirrors + audit
     "customer_receipts",
     "outstanding_snapshots",
+    "vasy_invoice_history",
     "vasy_invoices",
     "vasy_sales_items",
     "vasy_purchases",
