@@ -330,17 +330,28 @@ async function renderEmployees() {
   await loadEmployees();
   view.innerHTML = `
     <div class="card">
-      <h2><span class="eyebrow">New</span> Add employee</h2>
+      <h2><span class="eyebrow" id="emp-form-eyebrow">New</span> <span id="emp-form-title">Add employee</span></h2>
       <form id="emp-form">
+        <input type="hidden" name="id" />
         <div class="row">
           <div><label>Name</label><input name="name" required /></div>
           <div><label>Phone</label><input name="phone" /></div>
         </div>
         <div class="row">
+          <div><label>Employee code</label><input name="code" /></div>
+          <div><label>Department</label><input name="department" /></div>
+        </div>
+        <div class="row">
           <div><label>Joining date</label><input type="date" name="join_date" /></div>
           <div><label>Monthly salary</label><input type="number" step="0.01" name="monthly_salary" /></div>
         </div>
-        <div class="form-actions"><button type="submit">Add employee</button></div>
+        <div class="row">
+          <div><label>Annual leave quota</label><input type="number" step="0.5" name="annual_leave_quota" /></div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" id="emp-form-submit">Add employee</button>
+          <button type="button" id="emp-form-cancel" style="display:none; background:var(--ink-soft);">Cancel</button>
+        </div>
       </form>
     </div>
     <div class="card">
@@ -354,7 +365,10 @@ async function renderEmployees() {
               <td>${escapeHtml(e.name)}</td>
               <td>${escapeHtml(e.phone || '—')}</td>
               <td class="num">${money(e.monthly_salary)}</td>
-              <td><button class="icon-btn" data-remove="${e.id}" title="Remove employee">✕</button></td>
+              <td>
+                <button class="icon-btn" data-edit="${e.id}" title="Edit employee">✎</button>
+                <button class="icon-btn" data-remove="${e.id}" title="Remove employee">✕</button>
+              </td>
             </tr>
           `).join('')}
         </tbody>
@@ -368,14 +382,60 @@ async function renderEmployees() {
       </table>`}
     </div>
   `;
-  document.getElementById('emp-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const payload = Object.fromEntries(new FormData(e.target).entries());
+  const form = document.getElementById('emp-form');
+  const idField = form.elements['id'];
+  const submitBtn = document.getElementById('emp-form-submit');
+  const cancelBtn = document.getElementById('emp-form-cancel');
+  const eyebrow = document.getElementById('emp-form-eyebrow');
+  const title = document.getElementById('emp-form-title');
+
+  function resetForm() {
+    form.reset();
+    idField.value = '';
+    submitBtn.textContent = 'Add employee';
+    cancelBtn.style.display = 'none';
+    eyebrow.textContent = 'New';
+    title.textContent = 'Add employee';
+  }
+
+  function startEdit(e) {
+    idField.value = e.id;
+    form.elements['name'].value = e.name || '';
+    form.elements['phone'].value = e.phone || '';
+    form.elements['code'].value = e.code || '';
+    form.elements['department'].value = e.department || '';
+    form.elements['join_date'].value = e.join_date || '';
+    form.elements['monthly_salary'].value = e.monthly_salary ?? '';
+    form.elements['annual_leave_quota'].value = e.annual_leave_quota ?? '';
+    submitBtn.textContent = 'Save changes';
+    cancelBtn.style.display = '';
+    eyebrow.textContent = 'Edit';
+    title.textContent = `Edit ${e.name}`;
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const payload = Object.fromEntries(new FormData(form).entries());
+    const empId = payload.id;
+    delete payload.id;
     try {
-      await api('/employees', { method: 'POST', body: JSON.stringify(payload) });
-      toast('Employee added');
+      if (empId) {
+        await api('/employees/' + empId, { method: 'PUT', body: JSON.stringify(payload) });
+        toast('Employee updated');
+      } else {
+        await api('/employees', { method: 'POST', body: JSON.stringify(payload) });
+        toast('Employee added');
+      }
       renderEmployees();
     } catch (err) { toast(err.message); }
+  });
+  cancelBtn.addEventListener('click', resetForm);
+  view.querySelectorAll('[data-edit]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const emp = employeesCache.find(e => String(e.id) === btn.dataset.edit);
+      if (emp) startEdit(emp);
+    });
   });
   view.querySelectorAll('[data-remove]').forEach(btn => {
     btn.addEventListener('click', async () => {
