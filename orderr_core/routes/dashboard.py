@@ -157,6 +157,9 @@ def dashboard(
             if key not in grand_pending_items:
                 grand_pending_items[key] = {"product": i["product"], "unit": i["unit"], "total_quantity": 0}
             grand_pending_items[key]["total_quantity"] += i["total_quantity"]
+    for key, row in product_summary.items():
+        row["pending_quantity"] = grand_pending_items.get(key, {}).get("total_quantity", 0)
+
     grand_pending_items = sorted(grand_pending_items.values(), key=lambda x: -x["total_quantity"])
 
     grand_hotel_totals  = _hotel_breakdown(clear_orders)

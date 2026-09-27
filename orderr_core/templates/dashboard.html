@@ -470,11 +470,11 @@
 
         <div class="summary-table product-table-wrap">
             <table>
-                <thead><tr><th>Product</th><th>Qty</th><th>Unit</th><th>#</th></tr></thead>
+                <thead><tr><th>Product</th><th>Qty / Pending</th><th>Unit</th><th>#</th></tr></thead>
                 <tbody>
                     {% if product_summary %}
                         {% for item in product_summary %}
-                        <tr><td>{{ erp_name(item.product) }}</td><td><strong>{{ item.total_quantity }}</strong></td><td>{{ item.unit }}</td><td>{{ item.orders_count }}</td></tr>
+                        <tr><td>{{ erp_name(item.product) }}</td><td><strong>{{ item.total_quantity }}</strong>{% if item.pending_quantity %} / <span style="color:#e67e22">{{ item.pending_quantity }}</span>{% endif %}</td><td>{{ item.unit }}</td><td>{{ item.orders_count }}</td></tr>
                         {% endfor %}
                     {% else %}
                         <tr><td colspan="4" style="text-align:center;color:#aaa">No orders for this date</td></tr>
