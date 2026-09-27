@@ -1126,7 +1126,7 @@ def business_overview(db: Session, start: date, end: date, row_cap: int = 1000) 
     # Each row sits on the 1st of its month; include the rows whose month-start
     # falls in the window. These are accrual P&L lines, so they reduce Net.
     from orderr_core.models.monthly_overhead import (
-        MonthlyOverhead, HEAD_SALARIES, HEAD_SAVING,
+        MonthlyOverhead, HEAD_SALARIES, HEAD_SAVING, HEAD_ELECTRICITY, HEAD_PUNE_LOAN,
     )
     oh_rows = (db.query(MonthlyOverhead)
                .filter(MonthlyOverhead.period >= start,
@@ -1134,7 +1134,9 @@ def business_overview(db: Session, start: date, end: date, row_cap: int = 1000) 
                .all())
     salaries_total = float(sum(float(o.amount) for o in oh_rows if o.head == HEAD_SALARIES))
     saving_total = float(sum(float(o.amount) for o in oh_rows if o.head == HEAD_SAVING))
-    overhead_total = salaries_total + saving_total
+    electricity_total = float(sum(float(o.amount) for o in oh_rows if o.head == HEAD_ELECTRICITY))
+    pune_loan_total = float(sum(float(o.amount) for o in oh_rows if o.head == HEAD_PUNE_LOAN))
+    overhead_total = salaries_total + saving_total + electricity_total + pune_loan_total
 
     # Prefill the editable box for the window's month (the end month — for the
     # month-to-date default, start and end share a month, so this is unambiguous).
@@ -1168,6 +1170,11 @@ def business_overview(db: Session, start: date, end: date, row_cap: int = 1000) 
         "salaries_total_fmt": fmt_inr(salaries_total),
         "saving_amount": round(edit_rows.get(HEAD_SAVING, 0.0), 2),
         "saving_total_fmt": fmt_inr(saving_total),
+        "electricity_amount": round(edit_rows.get(HEAD_ELECTRICITY, 0.0), 2),
+        "electricity_total_fmt": fmt_inr(electricity_total),
+        "pune_loan_amount": round(edit_rows.get(HEAD_PUNE_LOAN, 0.0), 2),
+        "pune_loan_total_fmt": fmt_inr(pune_loan_total),
+        "electricity_pune_total_fmt": fmt_inr(electricity_total + pune_loan_total),
     }
 
 
@@ -1178,7 +1185,7 @@ def set_overhead(db: Session, data: dict) -> str | None:
     0 / blank clears that (month, head) figure. Returns an error string, or None
     on success (house convention)."""
     from orderr_core.models.monthly_overhead import (
-        MonthlyOverhead, HEAD_SALARIES, HEAD_SAVING,
+        MonthlyOverhead, HEAD_SALARIES, HEAD_SAVING, HEAD_ELECTRICITY, HEAD_PUNE_LOAN,
     )
 
     raw = (data.get("period") or "").strip()
@@ -1193,7 +1200,7 @@ def set_overhead(db: Session, data: dict) -> str | None:
         return "Pick the month this figure is for."
 
     head = (data.get("head") or "").strip()
-    canonical = {HEAD_SALARIES.lower(): HEAD_SALARIES, HEAD_SAVING.lower(): HEAD_SAVING}
+    canonical = {h.lower(): h for h in (HEAD_SALARIES, HEAD_SAVING, HEAD_ELECTRICITY, HEAD_PUNE_LOAN)}
     head = canonical.get(head.lower())
     if head is None:
         return "Unknown overhead head."

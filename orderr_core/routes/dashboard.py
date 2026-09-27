@@ -938,8 +938,9 @@ async def analytics_business_set_overhead(
     db: Session = Depends(get_db),
     username: str = Depends(require_auth),
 ):
-    """Set a manual overhead head (Salaries / Daily saving) for a month — feeds
-    the Business Net. Amount 0 / blank clears that figure."""
+    """Set a manual overhead head (Salaries / Daily saving / Electricity bill /
+    Pune loan) for a month — feeds the Business Net. Amount 0 / blank clears
+    that figure."""
     from orderr_core.services import analytics_service
 
     body = await request.json()
@@ -978,7 +979,7 @@ _PIN_TABS = {
     "close", "financials", "expenses", "revenue",
     "products", "team", "reconcile",
     "credit", "rfm", "churn", "payment", "portfolio", "lifecycle",
-    "wastage", "quality", "datahealth", "imports", "bankrecon",
+    "wastage", "quality", "datahealth", "imports", "bankrecon", "missing_entries",
 }
 
 

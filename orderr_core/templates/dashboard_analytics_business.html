@@ -157,10 +157,10 @@ tfoot td{font-weight:700;background:var(--bg)}
   <div class="net">
     <span>Sales (billed)<span class="v pos">{{ biz.sales_fmt }}</span></span>
     <span>Purchases + Expenses<span class="v">{{ biz.vasy_out_fmt }}</span></span>
-    <span>Salaries + Daily saving<span class="v">{{ biz.overhead_total_fmt }}</span></span>
+    <span>Salaries + Saving + Electricity + Loan<span class="v">{{ biz.overhead_total_fmt }}</span></span>
     <span>Net<span class="v {{ 'pos' if biz.net_positive else 'neg' }}">{{ biz.net_fmt }}</span></span>
     <span>Net %<span class="v {{ 'pos' if biz.net_positive else 'neg' }}">{{ biz.net_margin_pct_fmt }}</span></span>
-    <span style="margin-left:auto;max-width:360px;font-size:10.5px;line-height:1.4">Net = Sales − Purchases − Expenses − Salaries − Daily saving (all accrual). Net % = Net ÷ Sales. Received (cash-in), loans &amp; owner cash-in aren't here — those are cash-only, in the <a href="/dashboard/analytics/cashbook" style="color:var(--blue)">Cash book</a>.</span>
+    <span style="margin-left:auto;max-width:360px;font-size:10.5px;line-height:1.4">Net = Sales − Purchases − Expenses − Salaries − Daily saving − Electricity bill − Pune loan (all accrual). Net % = Net ÷ Sales. Received (cash-in) &amp; owner cash-in aren't here — those are cash-only, in the <a href="/dashboard/analytics/cashbook" style="color:var(--blue)">Cash book</a>.</span>
   </div>
 
   <!-- Salaries & Daily saving (paid outside Vasy) — folded into Net above -->
@@ -177,6 +177,23 @@ tfoot td{font-weight:700;background:var(--bg)}
         <span class="ohsaved" id="oh-saved">Saved ✓</span>
       </div>
       <div class="oherr" id="oh-err"></div>
+    </div>
+  </details>
+
+  <!-- Electricity bill & Pune loan (paid outside Vasy) — folded into Net above -->
+  <details class="ohbox"{% if biz.electricity_amount or biz.pune_loan_amount %} open{% endif %}>
+    <summary>💡 Electricity bill &amp; Pune loan <span class="mut">— {{ biz.electricity_pune_total_fmt }} in {{ biz.edit_month_fmt }} · not booked in Vasy</span></summary>
+    <div class="ohbody">
+      <div class="ohnote">Vasy's register never books the electricity bill or the Pune loan installment, so Net understated profit. Enter each month's figure here and it folds into Net. Editing <b>{{ biz.edit_month_fmt }}</b> (the viewed window's month) · set to 0 to clear.</div>
+      <div class="ohrow">
+        <div class="fld"><label>Electricity bill (₹) — {{ biz.edit_month_fmt }}</label>
+          <input id="oh-electricity" inputmode="decimal" value="{{ '%g'|format(biz.electricity_amount) if biz.electricity_amount else '' }}" placeholder="0"></div>
+        <div class="fld"><label>Pune loan (₹) — {{ biz.edit_month_fmt }}</label>
+          <input id="oh-pune-loan" inputmode="decimal" value="{{ '%g'|format(biz.pune_loan_amount) if biz.pune_loan_amount else '' }}" placeholder="0"></div>
+        <button class="ohbtn" onclick="saveOverheads2()">Save</button>
+        <span class="ohsaved" id="oh-saved2">Saved ✓</span>
+      </div>
+      <div class="oherr" id="oh-err2"></div>
     </div>
   </details>
 
@@ -300,6 +317,20 @@ async function saveOverheads(){
     var s = document.getElementById('oh-saved'); s.classList.add('on');
     location.reload();
   }catch(e){ ohErr(e.message || 'Network error — try again.'); }
+}
+
+// Electricity bill & Pune loan — same pattern as the Salaries/Saving box above.
+function ohErr2(msg){ var el=document.getElementById('oh-err2'); if(!el) return; el.textContent=msg||''; el.style.display=msg?'block':'none'; }
+async function saveOverheads2(){
+  ohErr2('');
+  var elec = (document.getElementById('oh-electricity').value || '').trim();
+  var loan = (document.getElementById('oh-pune-loan').value || '').trim();
+  try{
+    await ohPost('Electricity bill', elec || '0');
+    await ohPost('Pune loan', loan || '0');
+    var s = document.getElementById('oh-saved2'); s.classList.add('on');
+    location.reload();
+  }catch(e){ ohErr2(e.message || 'Network error — try again.'); }
 }
 </script>
 </body>

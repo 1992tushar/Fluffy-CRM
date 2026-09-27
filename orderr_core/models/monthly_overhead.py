@@ -1,8 +1,8 @@
 """
 monthly_overheads — manually-entered accrual overheads that Vasy's expense
-register never sees. Two heads today: **Salaries** and **Daily saving** (the
-daily-collection amount the owner sets aside); the `head` field leaves room for
-more later.
+register never sees. Heads: **Salaries**, **Daily saving** (the daily-collection
+amount the owner sets aside), **Electricity bill**, and **Pune loan** (a
+recurring loan installment); the `head` field leaves room for more later.
 
 The Business "Net" (Sales − Purchases − Expenses) understated profit because
 these are paid outside the Vasy ledger. Each row is one month's figure for one
@@ -24,6 +24,8 @@ from orderr_core.database import Base
 # upsert keys on them, and the UI prefills the current month from them.
 HEAD_SALARIES = "Salaries"
 HEAD_SAVING = "Daily saving"
+HEAD_ELECTRICITY = "Electricity bill"
+HEAD_PUNE_LOAN = "Pune loan"
 
 
 class MonthlyOverhead(Base):
