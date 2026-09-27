@@ -1160,6 +1160,7 @@ def business_overview(db: Session, start: date, end: date, row_cap: int = 1000) 
         "money_out_fmt": fmt_inr(money_out),
         "net_fmt": fmt_inr(net),
         "net_positive": net >= 0,
+        "net_margin_pct_fmt": f"{net / sales_total * 100:.1f}%" if sales_total else "—",
         # Editable two-head box (current window's month)
         "edit_month_iso": edit_month.isoformat(),
         "edit_month_fmt": edit_month.strftime("%b %Y"),

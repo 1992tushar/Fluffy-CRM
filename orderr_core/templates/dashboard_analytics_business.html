@@ -159,7 +159,8 @@ tfoot td{font-weight:700;background:var(--bg)}
     <span>Purchases + Expenses<span class="v">{{ biz.vasy_out_fmt }}</span></span>
     <span>Salaries + Daily saving<span class="v">{{ biz.overhead_total_fmt }}</span></span>
     <span>Net<span class="v {{ 'pos' if biz.net_positive else 'neg' }}">{{ biz.net_fmt }}</span></span>
-    <span style="margin-left:auto;max-width:360px;font-size:10.5px;line-height:1.4">Net = Sales − Purchases − Expenses − Salaries − Daily saving (all accrual). Received (cash-in), loans &amp; owner cash-in aren't here — those are cash-only, in the <a href="/dashboard/analytics/cashbook" style="color:var(--blue)">Cash book</a>.</span>
+    <span>Net %<span class="v {{ 'pos' if biz.net_positive else 'neg' }}">{{ biz.net_margin_pct_fmt }}</span></span>
+    <span style="margin-left:auto;max-width:360px;font-size:10.5px;line-height:1.4">Net = Sales − Purchases − Expenses − Salaries − Daily saving (all accrual). Net % = Net ÷ Sales. Received (cash-in), loans &amp; owner cash-in aren't here — those are cash-only, in the <a href="/dashboard/analytics/cashbook" style="color:var(--blue)">Cash book</a>.</span>
   </div>
 
   <!-- Salaries & Daily saving (paid outside Vasy) — folded into Net above -->
