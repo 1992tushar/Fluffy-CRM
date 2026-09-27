@@ -1174,7 +1174,6 @@ def business_overview(db: Session, start: date, end: date, row_cap: int = 1000) 
         "electricity_total_fmt": fmt_inr(electricity_total),
         "pune_loan_amount": round(edit_rows.get(HEAD_PUNE_LOAN, 0.0), 2),
         "pune_loan_total_fmt": fmt_inr(pune_loan_total),
-        "electricity_pune_total_fmt": fmt_inr(electricity_total + pune_loan_total),
     }
 
 
