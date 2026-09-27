@@ -1177,6 +1177,46 @@ def analytics_receivables(
     )
 
 
+@router.get("/analytics/missing-entries", response_class=HTMLResponse)
+def analytics_missing_entries(
+    request: Request,
+    from_: str = Query(default=None, alias="from"),
+    to: str = Query(default=None),
+    db: Session = Depends(get_db),
+    username: str = Depends(require_auth),
+):
+    """Bank transactions with no matching Vasy receipt/payment — money that
+    moved through the account (in or out) but was never logged in Vasy."""
+    from datetime import date as _date
+    from orderr_core.services import analytics_service
+
+    today = get_current_business_date()
+    from_date = None
+    to_date = None
+    if from_:
+        try:
+            from_date = _date.fromisoformat(from_)
+        except ValueError:
+            from_date = None
+    if to:
+        try:
+            to_date = _date.fromisoformat(to)
+        except ValueError:
+            to_date = None
+    data = analytics_service.bank_gaps(db, from_date=from_date, to_date=to_date, today=today)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard_analytics_missing_entries.html",
+        context={
+            "plant_name" : PLANT_NAME,
+            "current_time": datetime.now(IST).strftime("%d %b %Y, %I:%M %p"),
+            "mg"         : data,
+            "analytics_view": "missing_entries",
+        },
+    )
+
+
 @router.get("/analytics/admin/diagnose-matching")
 def analytics_diagnose_matching(
     request: Request,

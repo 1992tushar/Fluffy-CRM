@@ -17,7 +17,7 @@ import calendar
 from datetime import date, datetime, timedelta
 from statistics import median
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from orderr_core import config as _config
@@ -34,6 +34,7 @@ from orderr_core.models.vasy_purchase import VasyPurchase
 from orderr_core.models.vasy_expense import VasyExpense
 from orderr_core.models.vasy_payment import VasyPayment
 from orderr_core.models.vasy_supplier_bill import VasySupplierBill
+from orderr_core.models.bank_transaction import BankTransaction
 from orderr_core.services.template_parser import erp_display_name, ERP_ITEMS
 from orderr_core.utils import safe_list, fmt_qty
 
@@ -3968,4 +3969,98 @@ def parse_quality(db: Session, today: date, days: int = 30) -> dict:
         "total_unclear": unc,
         "overall_pct": round(unc / tot * 100, 1) if tot else None,
         "days": days,
+    }
+
+
+# ── Bank ↔ Vasy row-level gap check ────────────────────────────────────────
+# Existing bank_recon (see close_service.py) only compares MONTH TOTALS (bank
+# credit/debit sum vs Vasy receipt/payment sum) — good for a sanity check, but
+# it can't say WHICH transaction is missing. This does the row-level match: a
+# bank credit is paired with the closest-dated CustomerReceipt of the same
+# exact amount (non-cash only — cash never touches the bank) within a date
+# window; a bank debit is paired the same way against VasyPayment. Whatever's
+# left unpaired on the bank side is money that moved but was never logged in
+# Vasy — bank charges, a missed receipt entry, an unrecorded cash payout, etc.
+_BANK_GAP_WINDOW_DAYS = 3
+
+
+def _match_bank_side(bank_rows, candidates, amount_of, date_of):
+    """Greedy nearest-date matching, one candidate used at most once. Returns
+    the bank_rows that found no candidate of the same amount within the
+    window — i.e. not recorded in Vasy."""
+    used = set()
+    unmatched = []
+    for txn in bank_rows:
+        best_idx, best_gap = None, None
+        for i, c in enumerate(candidates):
+            if i in used:
+                continue
+            if round(float(amount_of(c) or 0), 2) != round(float(txn.amount or 0), 2):
+                continue
+            d = date_of(c)
+            if d is None or txn.value_date is None:
+                continue
+            gap = abs((d - txn.value_date).days)
+            if gap > _BANK_GAP_WINDOW_DAYS:
+                continue
+            if best_gap is None or gap < best_gap:
+                best_idx, best_gap = i, gap
+        if best_idx is not None:
+            used.add(best_idx)
+        else:
+            unmatched.append(txn)
+    return unmatched
+
+
+def bank_gaps(db: Session, from_date: date = None, to_date: date = None, today: date = None) -> dict:
+    """Bank transactions with no matching Vasy receipt/payment for the range."""
+    if today is None:
+        from orderr_core.dates import get_current_business_date
+        today = get_current_business_date()
+    to_date = to_date or today
+    from_date = from_date or to_date.replace(day=1)
+    window = timedelta(days=_BANK_GAP_WINDOW_DAYS)
+    lo, hi = from_date - window, to_date + window
+
+    credits = db.query(BankTransaction).filter(
+        BankTransaction.direction == "cr",
+        BankTransaction.value_date >= from_date, BankTransaction.value_date <= to_date,
+    ).order_by(BankTransaction.value_date).all()
+    debits = db.query(BankTransaction).filter(
+        BankTransaction.direction == "dr",
+        BankTransaction.value_date >= from_date, BankTransaction.value_date <= to_date,
+    ).order_by(BankTransaction.value_date).all()
+
+    receipts = db.query(CustomerReceipt).filter(
+        or_(CustomerReceipt.mode == None, CustomerReceipt.mode != "cash"),           # noqa: E711
+        CustomerReceipt.receipt_date >= lo, CustomerReceipt.receipt_date <= hi,
+    ).all()
+    payments = db.query(VasyPayment).filter(
+        or_(VasyPayment.mode == None, VasyPayment.mode != "cash"),                   # noqa: E711
+        VasyPayment.payment_date >= lo, VasyPayment.payment_date <= hi,
+    ).all()
+
+    missing_receipts = _match_bank_side(credits, receipts, lambda r: r.amount, lambda r: r.receipt_date)
+    missing_payments = _match_bank_side(debits, payments, lambda p: p.amount, lambda p: p.payment_date)
+
+    def _row(t):
+        return {
+            "id": t.id,
+            "date_display": t.value_date.strftime("%d %b") if t.value_date else "",
+            "amount_fmt": fmt_inr(t.amount),
+            "description": t.description or "",
+            "counterparty": t.party_label or t.counterparty_raw or "",
+        }
+
+    return {
+        "from_display": from_date.strftime("%d %b %Y"),
+        "to_display": to_date.strftime("%d %b %Y"),
+        "from_date": from_date.isoformat(),
+        "to_date": to_date.isoformat(),
+        "credits_checked": len(credits),
+        "debits_checked": len(debits),
+        "missing_receipts": [_row(t) for t in missing_receipts],
+        "missing_payments": [_row(t) for t in missing_payments],
+        "missing_receipts_total_fmt": fmt_inr(sum(float(t.amount or 0) for t in missing_receipts)),
+        "missing_payments_total_fmt": fmt_inr(sum(float(t.amount or 0) for t in missing_payments)),
     }
