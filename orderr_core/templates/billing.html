@@ -484,11 +484,16 @@ function buildHotelCard(h){
         : '<span class="hotel-badge badge-vasy-pending" title="Not yet synced to Vasy">Vasy pending</span>')
     : '';
 
+  // Surface a qty-mismatch straight on the collapsed row — otherwise you'd
+  // have to open every hotel to find the one with the typo.
+  const hasQtyMismatch = (h.items||[]).some(it => qtyMismatchPct(it.ordered_qty, it.actual_qty) != null);
+
   const head = document.createElement('div');
   head.className = 'hotel-head';
   head.innerHTML =
     '<span class="hotel-dot dot-'+h.status+'"></span>' +
     '<span class="hotel-name">'+h.hotel_name+'</span>' +
+    (hasQtyMismatch ? '<span class="hotel-badge" style="background:var(--amber-bg);color:var(--amber)" title="A delivered quantity looks off vs ordered">⚠ qty mismatch</span>' : '') +
     (h.invoice_number ? '<span class="hotel-meta">'+h.invoice_number+' - ₹'+h.invoice_total?.toFixed(2)+'</span>' : '') +
     '<span class="hotel-badge badge-'+h.status+'">'+statusLabel+'</span>' +
     vasyBadge +
