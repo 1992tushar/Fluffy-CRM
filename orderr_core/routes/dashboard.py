@@ -1413,6 +1413,40 @@ def analytics_invoice_integrity(
     )
 
 
+@router.get("/analytics/ledger-deletions", response_class=HTMLResponse)
+def analytics_ledger_deletions(
+    request: Request,
+    db: Session = Depends(get_db),
+    username: str = Depends(require_auth),
+):
+    """Flat audit log of every receipt/sales-invoice/purchase/expense/payment
+    that vanished from a later Vasy sync after being seen in an earlier one —
+    a plain deletion record for the accountant to review, no auto-flagging."""
+    from orderr_core.services import vasy_import
+
+    rows = vasy_import.ledger_deletions_report(db)
+    formatted = [{
+        "entity_type": r["entity_type"],
+        "entity_key": r["entity_key"],
+        "party_name": r["party_name"],
+        "amount_fmt": r["amount_fmt"],
+        "entry_date": r["entry_date"].strftime("%d %b %Y") if r["entry_date"] else "",
+        "deleted_at": r["deleted_at"].astimezone(IST).strftime("%d %b %Y %I:%M %p") if r["deleted_at"] else "",
+        "source_file": r["source_file"] or "",
+    } for r in rows]
+
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard_analytics_ledger_deletions.html",
+        context={
+            "plant_name": PLANT_NAME,
+            "current_time": datetime.now(IST).strftime("%d %b %Y, %I:%M %p"),
+            "rows": formatted,
+            "analytics_view": "ledger_deletions",
+        },
+    )
+
+
 @router.post("/analytics/import/receipts")
 async def analytics_import_receipts(
     file: UploadFile = File(...),

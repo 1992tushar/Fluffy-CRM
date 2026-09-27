@@ -43,6 +43,7 @@ CLEAR_TABLES = [
     "customer_receipts",
     "outstanding_snapshots",
     "vasy_invoice_history",
+    "ledger_deletion_history",
     "vasy_invoices",
     "vasy_sales_items",
     "vasy_purchases",

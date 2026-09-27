@@ -32,6 +32,7 @@ from orderr_core.models.outstanding_snapshot import OutstandingSnapshot
 from orderr_core.models.import_log import ImportLog
 from orderr_core.models.vasy_invoice import VasyInvoice, VasyInvoiceItem
 from orderr_core.models.vasy_invoice_history import VasyInvoiceHistory
+from orderr_core.models.ledger_deletion_history import LedgerDeletionHistory
 from orderr_core.models.vasy_purchase import VasyPurchase, VasyPurchaseItem
 from orderr_core.models.vasy_expense import VasyExpense
 from orderr_core.models.vasy_payment import VasyPayment
@@ -259,7 +260,8 @@ def import_receipts(db: Session, file_bytes: bytes, source_file: str = None) -> 
             rec.created_by = created_by
             updated += 1
 
-    removed = _purge_stale_ledger_rows(db, existing, seen, seen_dates, "receipt_date")
+    removed = _purge_stale_ledger_rows(db, existing, seen, seen_dates, "receipt_date",
+                                       entity_type="receipt", source_file=source_file)
 
     log = ImportLog(entity="receipts", source_file=source_file,
                     rows_total=created + updated, created=created,
@@ -569,7 +571,9 @@ def import_sales_invoices(db: Session, file_bytes: bytes, source_file: str = Non
 
     seen = set(invoices.keys())
     seen_dates = [inv["date"] for inv in invoices.values()]
-    removed = _purge_stale_ledger_rows(db, existing, seen, seen_dates, "invoice_date")
+    removed = _purge_stale_ledger_rows(db, existing, seen, seen_dates, "invoice_date",
+                                       entity_type="sales_invoice", amount_attr="total",
+                                       source_file=source_file)
 
     db.add(ImportLog(entity="sales_invoices", source_file=source_file,
                      rows_total=created + updated, created=created,
@@ -630,7 +634,9 @@ def _is_total_row(v):
 
 
 def _purge_stale_ledger_rows(db: Session, existing: dict, seen: set, seen_dates: list,
-                             date_attr: str) -> int:
+                             date_attr: str, entity_type: str = None,
+                             amount_attr: str = "amount", party_attr: str = "party_name",
+                             source_file: str = None) -> int:
     """Delete existing rows whose key vanished from a re-uploaded ledger file —
     e.g. an expense/receipt/bill deleted in Vasy after a prior import. Ledger
     exports may cover ANY date range (unlike the daily outstanding snapshot),
@@ -641,6 +647,10 @@ def _purge_stale_ledger_rows(db: Session, existing: dict, seen: set, seen_dates:
 
     Rows with no date (existing) or an undated file (no seen_dates) are left
     alone rather than guessed at.
+
+    When `entity_type` is given, each deleted row is logged to
+    LedgerDeletionHistory (append-only) before being removed, so the deletion
+    itself is never silent — see that model for why.
     """
     dated = [d for d in seen_dates if d is not None]
     if not dated:
@@ -652,6 +662,15 @@ def _purge_stale_ledger_rows(db: Session, existing: dict, seen: set, seen_dates:
             continue
         d = getattr(rec, date_attr, None)
         if d is not None and lo <= d <= hi:
+            if entity_type:
+                db.add(LedgerDeletionHistory(
+                    entity_type=entity_type,
+                    entity_key=str(key),
+                    party_name=str(getattr(rec, party_attr, "") or ""),
+                    amount=float(getattr(rec, amount_attr, 0) or 0),
+                    entry_date=d,
+                    source_file=source_file,
+                ))
             db.delete(rec)
             removed += 1
     return removed
@@ -746,6 +765,32 @@ def disappeared_invoices_report(db: Session, days: int = 90) -> list:
             "no_matching_receipt": receipts_nearby < total * 0.9,
         })
     return out
+
+
+def ledger_deletions_report(db: Session, days: int = 90) -> list:
+    """Flat audit log: every receipt/sales-invoice/purchase/expense/payment
+    that existed in a prior Vasy sync and was purged because a later re-import
+    no longer listed it (deleted in Vasy after the fact). No suspicious/benign
+    heuristic here — unlike disappeared_invoices_report(), most of these
+    entity types have no natural counter-entry to match against, so this is a
+    plain list for a human to review, newest first."""
+    from datetime import timedelta
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    rows = (db.query(LedgerDeletionHistory)
+            .filter(LedgerDeletionHistory.deleted_at >= cutoff)
+            .order_by(LedgerDeletionHistory.deleted_at.desc())
+            .all())
+    return [{
+        "entity_type": r.entity_type,
+        "entity_key": r.entity_key,
+        "party_name": r.party_name,
+        "amount": float(r.amount),
+        "amount_fmt": _fmt_inr_local(float(r.amount)),
+        "entry_date": r.entry_date,
+        "source_file": r.source_file,
+        "deleted_at": r.deleted_at,
+    } for r in rows]
 
 
 # ── Sales item register (line-item sales; SKU mix + landing cost) ───────────
@@ -1005,7 +1050,9 @@ def import_purchases(db: Session, file_bytes: bytes, source_file: str = None) ->
 
     seen = set(bills.keys())
     seen_dates = [b["date"] for b in bills.values()]
-    removed = _purge_stale_ledger_rows(db, existing, seen, seen_dates, "bill_date")
+    removed = _purge_stale_ledger_rows(db, existing, seen, seen_dates, "bill_date",
+                                       entity_type="purchase", amount_attr="total",
+                                       source_file=source_file)
 
     db.add(ImportLog(entity="purchases", source_file=source_file, rows_total=created + updated,
                      created=created, updated=updated, unmatched=0,
@@ -1111,7 +1158,9 @@ def import_expenses(db: Session, file_bytes: bytes, source_file: str = None) -> 
         else:
             rec.paid = _to_amount(cell(row, "paid"))
             rec.unpaid = _to_amount(cell(row, "unpaid"))
-    removed = _purge_stale_ledger_rows(db, existing, seen, seen_dates, "expense_date")
+    removed = _purge_stale_ledger_rows(db, existing, seen, seen_dates, "expense_date",
+                                       entity_type="expense", amount_attr="total",
+                                       source_file=source_file)
 
     fmt = "register (with Payment Data)" if register_mode else "list"
     notes = f"format={fmt}; total={round(total_amount, 2)}; stale_removed={removed}"
@@ -1179,7 +1228,8 @@ def import_payments(db: Session, file_bytes: bytes, source_file: str = None) -> 
         rec.amount = amt
         rec.status = (str(cell(row, "status") or "").strip().lower() or None)
 
-    removed = _purge_stale_ledger_rows(db, existing, seen, seen_dates, "payment_date")
+    removed = _purge_stale_ledger_rows(db, existing, seen, seen_dates, "payment_date",
+                                       entity_type="payment", source_file=source_file)
 
     db.add(ImportLog(entity="payments", source_file=source_file, rows_total=created + updated,
                      created=created, updated=updated, unmatched=0,

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ plant_name }} · Ledger deletions</title>
+<style>
+:root{
+  --ink:#1a1a18;--ink2:#5a5a54;--ink3:#9a9a90;
+  --bg:#f4f3ef;--surface:#fff;--border:rgba(0,0,0,0.09);--border-strong:rgba(0,0,0,0.15);
+  --green:#1a6b41;--green-bg:#e8f5ee;--green-border:#b6ddc8;
+  --amber:#92540a;--amber-bg:#fef3c7;--amber-border:#f5cc6e;
+  --red:#b91c1c;--red-bg:#fee2e2;--red-border:#fca5a5;
+  --blue:#1b4fba;--blue-bg:#eff4ff;--blue-border:#b3c8f7;
+  --r:10px;--shadow:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.05);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;background:var(--bg);color:var(--ink);min-height:100vh}
+.nav{display:flex;align-items:center;background:var(--surface);border-bottom:1px solid var(--border);padding:0 20px;height:52px;position:sticky;top:0;z-index:100;box-shadow:var(--shadow)}
+.nav-back{display:flex;align-items:center;gap:4px;font-size:13px;font-weight:500;color:var(--ink3);text-decoration:none;margin-right:14px;padding:4px 8px;border-radius:6px}
+.nav-back:hover{color:var(--green);background:var(--bg)}
+.nav-logo{font-weight:700;font-size:15px;color:var(--green);display:flex;align-items:center;gap:6px}
+.nav-right{margin-left:auto}
+.date-chip{font-size:12px;color:var(--ink3);background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:4px 12px}
+main{max-width:1100px;margin:0 auto;padding:24px 18px 80px}
+.section-title{font-size:15px;font-weight:700;margin:6px 2px 12px}
+.note{font-size:12px;color:var(--ink3);background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--blue-border);border-radius:8px;padding:10px 14px;margin-bottom:16px}
+.stat-row{display:flex;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:14px 20px;min-width:160px}
+.stat .n{font-size:22px;font-weight:800}
+.stat .l{font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+.wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{background:var(--bg);color:var(--ink2);text-align:left;padding:9px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);white-space:nowrap}
+th.num,td.num{text-align:right;font-variant-numeric:tabular-nums}
+td{padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+tr:last-child td{border-bottom:none}
+.tag{display:inline-block;font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px;text-transform:uppercase}
+.tag.receipt{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+.tag.sales_invoice{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
+.tag.purchase,.tag.expense,.tag.payment{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)}
+.empty{color:var(--ink3);text-align:center;padding:22px}
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <a href="/dashboard/" class="nav-back">← Dashboard</a>
+  <span class="nav-logo">📊 {{ plant_name }} Analytics</span>
+  <div class="nav-right"><span class="date-chip">{{ current_time }}</span></div>
+</div>
+
+<main>
+  {% include "_analytics_subnav.html" %}
+
+  <div class="section-title">🗑️ Ledger deletions</div>
+  <div class="note">
+    Receipts, sales invoices, purchases, expenses and payments are all upserted from Vasy
+    exports — if a row present in one sync is missing from a later one, it means it was
+    deleted in Vasy after the fact. This is a plain audit log of every such deletion, newest
+    first; there's no automatic "suspicious" flag here (most of these entries have no natural
+    counter-entry to check against, unlike invoices), so use your judgement on which are
+    routine corrections and which need a closer look.
+  </div>
+
+  <div class="stat-row">
+    <div class="stat"><div class="n">{{ rows|length }}</div><div class="l">Deletions (90d)</div></div>
+  </div>
+
+  <div class="section-title">Deleted entries</div>
+  <div class="wrap"><div class="scroll">
+    <table>
+      <thead><tr>
+        <th>Type</th><th>Key</th><th>Party</th><th>Entry date</th>
+        <th class="num">Amount</th><th>Deleted</th><th>Source file</th>
+      </tr></thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td><span class="tag {{ r.entity_type }}">{{ r.entity_type.replace('_', ' ') }}</span></td>
+          <td>{{ r.entity_key }}</td>
+          <td>{{ r.party_name }}</td>
+          <td>{{ r.entry_date }}</td>
+          <td class="num">{{ r.amount_fmt }}</td>
+          <td>{{ r.deleted_at }}</td>
+          <td>{{ r.source_file }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="empty">No ledger deletions in the last 90 days. 👍</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div></div>
+</main>
+</body>
+</html>
