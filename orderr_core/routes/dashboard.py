@@ -210,7 +210,7 @@ def dashboard(
             "clear_orders"       : clear_orders,
             "area_groups"        : area_groups,
             "unclear_orders"     : unclear_orders,
-            "product_summary"    : list(product_summary.values()),
+            "product_summary"    : sorted(product_summary.values(), key=lambda x: -x["total_quantity"]),
             "grand_total_quantity"   : grand_total_quantity,
             "grand_pending_quantity" : grand_pending_quantity,
             "grand_pending_items"    : grand_pending_items,
