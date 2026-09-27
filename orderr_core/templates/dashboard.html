@@ -365,7 +365,7 @@
     <div class="cards">
         <div class="card">
             <details>
-                <summary class="number">{{ orders|length }}</summary>
+                <summary class="number">{{ orders|length }}{% if pending_orders_count %} / <span style="color:#e67e22">{{ pending_orders_count }}</span>{% endif %}</summary>
                 {% if grand_hotel_totals %}
                 <table class="hotel-breakdown-table">
                     {% for h in grand_hotel_totals %}

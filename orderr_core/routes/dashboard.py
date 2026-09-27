@@ -165,6 +165,8 @@ def dashboard(
     grand_hotel_totals  = _hotel_breakdown(clear_orders)
     grand_hotel_pending = _hotel_breakdown(clear_orders, pending_only=True)
 
+    pending_orders_count = sum(1 for o in clear_orders if o.id not in invoiced_order_ids)
+
     yesterday = (target_date - timedelta(days=1)).isoformat()
     tomorrow  = (target_date + timedelta(days=1)).isoformat()
     is_today  = (target_date == today)
@@ -215,6 +217,7 @@ def dashboard(
             "unclear_orders"     : unclear_orders,
             "product_summary"    : sorted(product_summary.values(), key=lambda x: -x["total_quantity"]),
             "grand_total_quantity"   : grand_total_quantity,
+            "pending_orders_count"   : pending_orders_count,
             "grand_pending_quantity" : grand_pending_quantity,
             "grand_pending_items"    : grand_pending_items,
             "grand_hotel_totals"     : grand_hotel_totals,
