@@ -31,6 +31,14 @@
         .card.warning .number { color:#e67e22; }
         .card.success .number { color:#27ae60; }
         .card.danger  .number { color:#c62828; }
+        /* Number-as-summary: clicking the big figure expands the hotel breakdown */
+        summary.number { cursor:pointer; list-style:none; }
+        summary.number::-webkit-details-marker { display:none; }
+        summary.number::marker { content:''; }
+        .card details[open] summary.number { margin-bottom:6px; }
+        .hotel-breakdown-table { width:100%; font-size:11px; text-align:left; }
+        .hotel-breakdown-table td { padding:2px 0; }
+        .hotel-breakdown-table td:last-child { text-align:right; white-space:nowrap; padding-left:8px; }
 
         /* ── Section ── */
         .section { padding:0 12px 20px; }
@@ -355,10 +363,43 @@
      ══════════════════════════════════════════════════════════════════════════ -->
 <div id="tab-orders" class="tab-pane active">
     <div class="cards">
-        <div class="card"><div class="number">{{ orders|length }}</div><div class="label">Total Orders</div></div>
-        <div class="card"><div class="number">{{ grand_total_quantity }}</div><div class="label">Total Quantity</div></div>
+        <div class="card">
+            <details>
+                <summary class="number">{{ orders|length }}</summary>
+                {% if grand_hotel_totals %}
+                <table class="hotel-breakdown-table">
+                    {% for h in grand_hotel_totals %}
+                    <tr><td>{{ h.customer_name }}</td><td><strong>{{ h.orders_count }}</strong> order{{ 's' if h.orders_count != 1 else '' }}</td></tr>
+                    {% endfor %}
+                </table>
+                {% endif %}
+            </details>
+            <div class="label">Total Orders</div>
+        </div>
+        <div class="card">
+            <details>
+                <summary class="number">{{ grand_total_quantity }}</summary>
+                {% if grand_hotel_totals %}
+                <table class="hotel-breakdown-table">
+                    {% for h in grand_hotel_totals %}
+                    <tr><td>{{ h.customer_name }}</td><td><strong>{{ h.total_quantity }}</strong></td></tr>
+                    {% endfor %}
+                </table>
+                {% endif %}
+            </details>
+            <div class="label">Total Quantity</div>
+        </div>
         <div class="card warning">
-            <div class="number">{{ grand_pending_quantity }}</div>
+            <details>
+                <summary class="number">{{ grand_pending_quantity }}</summary>
+                {% if grand_hotel_pending %}
+                <table class="hotel-breakdown-table">
+                    {% for h in grand_hotel_pending %}
+                    <tr><td>{{ h.customer_name }}</td><td><strong>{{ h.total_quantity }}</strong></td></tr>
+                    {% endfor %}
+                </table>
+                {% endif %}
+            </details>
             <div class="label">Pending (not billed)</div>
             {% if grand_pending_items %}
             <details style="margin-top:4px;text-align:left;">
@@ -373,7 +414,16 @@
         </div>
         {% for group in area_groups %}
         <div class="card">
-            <div class="number">{{ group.total_quantity }}</div>
+            <details>
+                <summary class="number">{{ group.total_quantity }}</summary>
+                {% if group.hotel_totals %}
+                <table class="hotel-breakdown-table">
+                    {% for h in group.hotel_totals %}
+                    <tr><td>{{ h.customer_name }}</td><td><strong>{{ h.total_quantity }}</strong></td></tr>
+                    {% endfor %}
+                </table>
+                {% endif %}
+            </details>
             <div class="label">📍 {{ group.area }}</div>
             {% if group.pending_items %}
             <details style="margin-top:4px;text-align:left;">
@@ -383,6 +433,14 @@
                     <tr><td>{{ erp_name(i.product) }}</td><td style="text-align:right;white-space:nowrap;"><strong>{{ i.total_quantity }}</strong> {{ i.unit }}</td></tr>
                     {% endfor %}
                 </table>
+                {% if group.hotel_pending %}
+                <div style="font-size:11px;color:#718096;margin-top:6px;font-weight:700;">By hotel:</div>
+                <table class="hotel-breakdown-table" style="margin-top:2px;">
+                    {% for h in group.hotel_pending %}
+                    <tr><td>{{ h.customer_name }}</td><td><strong>{{ h.total_quantity }}</strong></td></tr>
+                    {% endfor %}
+                </table>
+                {% endif %}
             </details>
             {% else %}
             <div style="font-size:11px;color:#c05621;margin-top:4px;">Pending: 0</div>

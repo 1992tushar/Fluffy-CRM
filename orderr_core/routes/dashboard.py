@@ -101,6 +101,23 @@ def dashboard(
     # added together, regardless of unit) so a route's total load is one glance,
     # plus a pending quantity — the slice of that total not yet invoiced/billed
     # — and a pending_items breakdown listing WHICH products make up that total.
+    def _hotel_breakdown(orders, pending_only=False):
+        """Per-hotel breakdown (name → quantity/order count) so a stat card's
+        number can be expanded to show WHICH hotels make it up, not just the
+        product mix. pending_only restricts to orders not yet invoiced."""
+        totals = {}
+        for order in orders:
+            if pending_only and order.id in invoiced_order_ids:
+                continue
+            name = order.customer_name or order.customer_phone
+            if name not in totals:
+                totals[name] = {"customer_name": name, "total_quantity": 0.0, "orders_count": 0}
+            totals[name]["orders_count"] += 1
+            for item in order.items_parsed:
+                if isinstance(item, dict):
+                    totals[name]["total_quantity"] += _qty_in_kg(item)
+        return sorted(totals.values(), key=lambda x: -x["total_quantity"])
+
     for group in area_groups:
         group["orders"].sort(key=lambda o: not getattr(o, "has_unclear_items", False))
         group["total_quantity"] = sum(
@@ -111,6 +128,8 @@ def dashboard(
         )
         group["pending_items"] = _pending_items_for(group["orders"])
         group["pending_quantity"] = sum(i["total_quantity_kg"] for i in group["pending_items"])
+        group["hotel_totals"]  = _hotel_breakdown(group["orders"])
+        group["hotel_pending"] = _hotel_breakdown(group["orders"], pending_only=True)
 
     product_summary = {}
     for order in clear_orders:
@@ -139,6 +158,9 @@ def dashboard(
                 grand_pending_items[key] = {"product": i["product"], "unit": i["unit"], "total_quantity": 0}
             grand_pending_items[key]["total_quantity"] += i["total_quantity"]
     grand_pending_items = sorted(grand_pending_items.values(), key=lambda x: -x["total_quantity"])
+
+    grand_hotel_totals  = _hotel_breakdown(clear_orders)
+    grand_hotel_pending = _hotel_breakdown(clear_orders, pending_only=True)
 
     yesterday = (target_date - timedelta(days=1)).isoformat()
     tomorrow  = (target_date + timedelta(days=1)).isoformat()
@@ -192,6 +214,8 @@ def dashboard(
             "grand_total_quantity"   : grand_total_quantity,
             "grand_pending_quantity" : grand_pending_quantity,
             "grand_pending_items"    : grand_pending_items,
+            "grand_hotel_totals"     : grand_hotel_totals,
+            "grand_hotel_pending"    : grand_hotel_pending,
             "total_items"        : sum(len(o.items_parsed) for o in clear_orders),
             "target_date"        : target_date.isoformat(),
             "target_date_display": target_date.strftime("%d %b %Y"),
