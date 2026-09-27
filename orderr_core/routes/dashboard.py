@@ -62,6 +62,38 @@ def dashboard(
     clear_orders   = [o for o in orders if not o.is_unclear]
     unclear_orders = [o for o in orders if o.is_unclear]
 
+    # Flag orders where the billed (actual) quantity differs sharply from what
+    # was ordered — e.g. a decimal-entry typo (2 kg billed as 0.2 kg). Purely
+    # informational: never blocks any flow, just surfaces the order on the
+    # board so staff can double-check it against the original order.
+    if clear_orders:
+        from orderr_core.models.actuals import OrderItemActual
+        actual_rows = db.query(OrderItemActual).filter(
+            OrderItemActual.order_id.in_([o.id for o in clear_orders]),
+            OrderItemActual.actual_quantity != None,  # noqa: E711
+        ).all()
+    else:
+        actual_rows = []
+    QTY_MISMATCH_THRESHOLD = 0.3  # 30%+ off ordered qty — beyond normal delivery variance
+    mismatches_by_order = {}
+    for r in actual_rows:
+        ordered = _qty_in_kg({"quantity": float(r.ordered_quantity), "unit": r.ordered_unit})
+        actual  = _qty_in_kg({"quantity": float(r.actual_quantity), "unit": r.actual_unit or r.ordered_unit})
+        if ordered <= 0:
+            continue
+        diff_pct = abs(actual - ordered) / ordered
+        if diff_pct < QTY_MISMATCH_THRESHOLD:
+            continue
+        mismatches_by_order.setdefault(r.order_id, []).append({
+            "product": r.product,
+            "ordered_quantity": r.ordered_quantity, "ordered_unit": r.ordered_unit,
+            "actual_quantity": r.actual_quantity, "actual_unit": r.actual_unit or r.ordered_unit,
+            "diff_pct": round(diff_pct * 100),
+        })
+    for order in clear_orders:
+        order.qty_mismatches = mismatches_by_order.get(order.id, [])
+        order.has_qty_mismatch = bool(order.qty_mismatches)
+
     # Group clear orders by the customer's assigned area (busiest area first,
     # "Area not set" last) so the board reads route-by-route.
     area_groups = group_orders_by_area(db, clear_orders)
