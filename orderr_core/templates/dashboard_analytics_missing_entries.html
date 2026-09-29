@@ -43,9 +43,11 @@ th.num,td.num{text-align:right;font-variant-numeric:tabular-nums}
 td{padding:9px 12px;border-bottom:1px solid var(--border)}
 tr:last-child td{border-bottom:none}
 tr.row{cursor:pointer} tr.row:hover{background:var(--green-bg)}
-.mk{width:34px;text-align:center}
-.mk input{width:16px;height:16px;cursor:pointer;accent-color:var(--amber)}
-tr.marked{background:var(--amber-bg)}
+.pk{width:92px;text-align:center;white-space:nowrap}
+.park{font-size:11px;font-weight:600;padding:4px 10px;border:1px solid var(--border-strong);border-radius:14px;background:var(--surface);color:var(--ink2);cursor:pointer}
+.park:hover{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber)}
+tr.parked{background:var(--amber-bg)}
+tr.parked .park{background:var(--amber);border-color:var(--amber);color:#fff}
 .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 2px 8px}
 .btn{font-size:12px;padding:7px 12px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);color:var(--ink);cursor:pointer;font-weight:600;text-decoration:none}
 .btn:hover{background:var(--bg)} .btn.on{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber)}
@@ -85,10 +87,10 @@ tr.marked{background:var(--amber-bg)}
   <div class="toolbar">
     <a class="btn {{ 'on' if mg.marked_only else '' }}"
        href="?from={{ mg.from_date }}&to={{ mg.to_date }}{% if not mg.marked_only %}&marked=1{% endif %}">
-      {{ '✕ Show all entries' if mg.marked_only else '🚩 Show marked only' }}</a>
-    <span style="font-size:12px;color:var(--ink2)"><b id="markedCount">{{ mg.marked_count }}</b> marked for review</span>
-    <a class="btn" href="/dashboard/analytics/missing-entries/export?from={{ mg.from_date }}&to={{ mg.to_date }}">⬇ Download marked (CSV)</a>
-    <button type="button" class="btn" id="copyMarked">📋 Copy marked list</button>
+      {{ '✕ Show all entries' if mg.marked_only else '🅿 Show parked only' }}</a>
+    <span style="font-size:12px;color:var(--ink2)"><b id="markedCount">{{ mg.marked_count }}</b> parked</span>
+    <a class="btn" href="/dashboard/analytics/missing-entries/export?from={{ mg.from_date }}&to={{ mg.to_date }}">⬇ Download parked (CSV)</a>
+    <button type="button" class="btn" id="copyMarked">📋 Copy parked list</button>
   </div>
 
   <div class="kpis">
@@ -101,12 +103,12 @@ tr.marked{background:var(--amber-bg)}
   <div class="section-head"><div class="section-title" style="font-size:13px;color:var(--red)">💰 Bank shows money IN — no matching receipt in Vasy</div></div>
   <div class="wrap"><div class="scroll">
     <table>
-      <thead><tr><th class="mk" title="Mark for review">🚩</th><th>Date</th><th>Description / counterparty</th><th class="num">Amount</th></tr></thead>
+      <thead><tr><th class="pk">Park</th><th>Date</th><th>Description / counterparty</th><th class="num">Amount</th></tr></thead>
       <tbody>
         {% for t in mg.missing_receipts %}
-        <tr class="row {{ 'marked' if t.flagged else '' }}" data-date="{{ t.date_iso }}" data-amt="{{ t.amount_raw }}" data-dir="IN"
+        <tr class="row {{ 'parked' if t.flagged else '' }}" data-date="{{ t.date_iso }}" data-amt="{{ t.amount_raw }}" data-dir="IN"
             onclick="location.href='/dashboard/analytics/bankrecon'">
-          <td class="mk" onclick="event.stopPropagation()"><input type="checkbox" data-id="{{ t.id }}" {{ 'checked' if t.flagged else '' }} aria-label="Mark for review"></td>
+          <td class="pk" onclick="event.stopPropagation()"><button type="button" class="park" data-id="{{ t.id }}" data-on="{{ 1 if t.flagged else 0 }}">{{ '🅿 Parked' if t.flagged else 'Park' }}</button></td>
           <td>{{ t.date_display }}</td>
           <td>{{ t.counterparty }}{% if t.counterparty and t.description %} — {% endif %}<span style="color:var(--ink3)">{{ t.description }}</span></td>
           <td class="num">{{ t.amount_fmt }}</td>
@@ -121,12 +123,12 @@ tr.marked{background:var(--amber-bg)}
   <div class="section-head" style="margin-top:24px"><div class="section-title" style="font-size:13px;color:var(--red)">💸 Bank shows money OUT — no matching expense/payment in Vasy</div></div>
   <div class="wrap"><div class="scroll">
     <table>
-      <thead><tr><th class="mk" title="Mark for review">🚩</th><th>Date</th><th>Description / counterparty</th><th class="num">Amount</th></tr></thead>
+      <thead><tr><th class="pk">Park</th><th>Date</th><th>Description / counterparty</th><th class="num">Amount</th></tr></thead>
       <tbody>
         {% for t in mg.missing_payments %}
-        <tr class="row {{ 'marked' if t.flagged else '' }}" data-date="{{ t.date_iso }}" data-amt="{{ t.amount_raw }}" data-dir="OUT"
+        <tr class="row {{ 'parked' if t.flagged else '' }}" data-date="{{ t.date_iso }}" data-amt="{{ t.amount_raw }}" data-dir="OUT"
             onclick="location.href='/dashboard/analytics/bankrecon'">
-          <td class="mk" onclick="event.stopPropagation()"><input type="checkbox" data-id="{{ t.id }}" {{ 'checked' if t.flagged else '' }} aria-label="Mark for review"></td>
+          <td class="pk" onclick="event.stopPropagation()"><button type="button" class="park" data-id="{{ t.id }}" data-on="{{ 1 if t.flagged else 0 }}">{{ '🅿 Parked' if t.flagged else 'Park' }}</button></td>
           <td>{{ t.date_display }}</td>
           <td>{{ t.counterparty }}{% if t.counterparty and t.description %} — {% endif %}<span style="color:var(--ink3)">{{ t.description }}</span></td>
           <td class="num">{{ t.amount_fmt }}</td>
@@ -142,29 +144,33 @@ tr.marked{background:var(--amber-bg)}
     Checked {{ mg.credits_checked }} bank credit{{ 's' if mg.credits_checked != 1 else '' }} and
     {{ mg.debits_checked }} bank debit{{ 's' if mg.debits_checked != 1 else '' }} between
     <b>{{ mg.from_display }}</b> and <b>{{ mg.to_display }}</b>. Click any row to open Bank Recon and
-    categorize/verify it. Tick 🚩 to mark a row for review, then download or copy the marked list for the accounts team.
+    categorize/verify it. Press Park on a row to set it aside for review — everyone using this page sees it. Use “Show parked only” to see just those, or download/copy the parked list for the accounts team.
   </div>
 </main>
 <script>
 (function(){
   function setCount(d){var el=document.getElementById('markedCount'); if(el) el.textContent=Math.max(0,(parseInt(el.textContent,10)||0)+d);}
-  document.addEventListener('change',function(e){
-    var cb=e.target; if(!cb.matches||!cb.matches('.mk input[data-id]')) return;
-    var on=cb.checked, tr=cb.closest('tr'); tr.classList.toggle('marked',on);
-    var fd=new FormData(); fd.append('txn_id',cb.dataset.id); fd.append('flagged',on?1:0);
+  document.addEventListener('click',function(e){
+    var btn=e.target.closest&&e.target.closest('button.park'); if(!btn) return;
+    var on=btn.dataset.on!=='1', tr=btn.closest('tr'), showOnly={{ 'true' if mg.marked_only else 'false' }};
+    btn.disabled=true;
+    var fd=new FormData(); fd.append('txn_id',btn.dataset.id); fd.append('flagged',on?1:0);
     fetch('/dashboard/analytics/missing-entries/flag',{method:'POST',body:fd}).then(function(r){
-      if(!r.ok) throw new Error(); setCount(on?1:-1);
-    }).catch(function(){cb.checked=!on; tr.classList.toggle('marked',!on); alert('Could not save the mark — try again.');});
+      if(!r.ok) throw new Error();
+      btn.dataset.on=on?'1':'0'; btn.textContent=on?'🅿 Parked':'Park'; tr.classList.toggle('parked',on); setCount(on?1:-1);
+      if(showOnly&&!on) tr.style.display='none';
+    }).catch(function(){alert('Could not save — try again.');}).then(function(){btn.disabled=false;});
   });
   document.getElementById('copyMarked').addEventListener('click',function(){
     var lines=[];
-    document.querySelectorAll('tr.row.marked').forEach(function(tr){
+    document.querySelectorAll('tr.row.parked').forEach(function(tr){
+      if(tr.style.display==='none') return;
       var t=tr.children[2].innerText.replace(/\s+/g,' ').trim();
       lines.push([tr.dataset.date,tr.dataset.dir,t,tr.dataset.amt].join('\t'));
     });
-    if(!lines.length){alert('Nothing marked in this view.');return;}
+    if(!lines.length){alert('Nothing parked in this view.');return;}
     var txt='Date\tIN/OUT\tDescription\tAmount\n'+lines.join('\n'), b=this;
-    (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(function(){b.textContent='✓ Copied';setTimeout(function(){b.textContent='📋 Copy marked list';},1500);})
+    (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(function(){b.textContent='✓ Copied';setTimeout(function(){b.textContent='📋 Copy parked list';},1500);})
       .catch(function(){window.prompt('Copy the list:',txt);});
   });
 })();
