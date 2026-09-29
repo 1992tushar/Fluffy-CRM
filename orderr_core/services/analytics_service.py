@@ -3989,34 +3989,42 @@ def parse_quality(db: Session, today: date, days: int = 30) -> dict:
 # left unpaired on the bank side is money that moved but was never logged in
 # Vasy — bank charges, a missed receipt entry, an unrecorded cash payout, etc.
 _BANK_GAP_WINDOW_DAYS = 3
+_BANK_GAP_AMOUNT_TOLERANCE = 1.0  # rupees
 
 
 def _match_bank_side(bank_rows, candidates, amount_of, date_of):
-    """Greedy nearest-date matching, one candidate used at most once. Returns
+    """Global closest-pair matching, one candidate used at most once. Returns
     the bank_rows that found no candidate of the same amount within the
-    window — i.e. not recorded in Vasy."""
-    used = set()
-    unmatched = []
-    for txn in bank_rows:
-        best_idx, best_gap = None, None
-        for i, c in enumerate(candidates):
-            if i in used:
-                continue
-            if round(float(amount_of(c) or 0), 2) != round(float(txn.amount or 0), 2):
+    window — i.e. not recorded in Vasy.
+
+    All viable (bank, candidate) pairs are ranked by amount difference, then
+    date gap, and taken best-first. A per-bank-row greedy pass would let an
+    earlier, genuinely-missing transaction steal a candidate that belongs to a
+    later same-amount transaction and flag the wrong row."""
+    pairs = []
+    for bi, txn in enumerate(bank_rows):
+        if txn.value_date is None:
+            continue
+        for ci, c in enumerate(candidates):
+            # Vasy sometimes carries a round-off paisa/rupee (3922.8 vs 3922).
+            diff = abs(float(amount_of(c) or 0) - float(txn.amount or 0))
+            if diff > _BANK_GAP_AMOUNT_TOLERANCE:
                 continue
             d = date_of(c)
-            if d is None or txn.value_date is None:
+            if d is None:
                 continue
             gap = abs((d - txn.value_date).days)
             if gap > _BANK_GAP_WINDOW_DAYS:
                 continue
-            if best_gap is None or gap < best_gap:
-                best_idx, best_gap = i, gap
-        if best_idx is not None:
-            used.add(best_idx)
-        else:
-            unmatched.append(txn)
-    return unmatched
+            pairs.append((round(diff, 2), gap, bi, ci))
+    pairs.sort()
+    used_bank, used_cand = set(), set()
+    for _, _, bi, ci in pairs:
+        if bi in used_bank or ci in used_cand:
+            continue
+        used_bank.add(bi)
+        used_cand.add(ci)
+    return [t for bi, t in enumerate(bank_rows) if bi not in used_bank]
 
 
 def bank_gaps(db: Session, from_date: date = None, to_date: date = None, today: date = None) -> dict:
