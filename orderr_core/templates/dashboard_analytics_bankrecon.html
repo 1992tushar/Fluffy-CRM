@@ -326,10 +326,34 @@ async function saveRow(btn){
     tr.style.opacity = '.5';
     tr.querySelectorAll('select,input,button').forEach(el => el.disabled = true);
     btn.textContent = '✓ Saved';
+    if (saveAlias) prefillMatching(tr, category, remark);
   }catch(e){
     alert('Could not save: ' + e.message);
     btn.disabled = false; btn.textContent = 'Save';
   }
+}
+
+// After "remember" saves a counterparty, fill (never save) the other pending rows
+// from the same counterparty so one click each confirms them. Rows the user has
+// already touched (category picked) or that are relay/saved are left alone.
+function prefillMatching(src, category, remark){
+  const key = src.getAttribute('data-cpkey');
+  if (!key) return;
+  const party = currentParty(src);
+  let n = 0;
+  document.querySelectorAll('tr[data-cpkey="' + key + '"][data-relay="0"]').forEach(r => {
+    if (r === src || r.style.opacity === '.5') return;
+    const sel = r.querySelector('select.cat');
+    if (!sel || sel.disabled || sel.value) return;
+    sel.value = category;
+    const rem = r.querySelector('input.remark');
+    if (rem && !rem.value) rem.value = remark;
+    if (party.party_id) setParty(r, {type: party.party_type, id: party.party_id, label: party.party_label});
+    r.style.background = 'var(--blue-bg, #eff4ff)';
+    r.title = 'Pre-filled from the row you just saved — press Save to confirm';
+    n++;
+  });
+  if (n) alert(n + ' other pending row(s) from this counterparty were pre-filled (highlighted blue). Press Save on each to confirm.');
 }
 
 async function uploadBill(input){
