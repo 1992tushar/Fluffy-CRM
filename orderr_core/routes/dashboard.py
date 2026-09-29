@@ -503,6 +503,8 @@ def analytics_bankrecon(
         })
 
     pending_count = db.query(BankTransaction).filter(BankTransaction.reviewed == False).count()  # noqa: E712
+    total_count = db.query(BankTransaction).count()
+    reviewed_count = total_count - pending_count
 
     # Full party list embedded once for client-side search — same pattern as
     # dashboard.html's customer search (fetch/embed once, filter in-browser),
@@ -548,6 +550,8 @@ def analytics_bankrecon(
             "created": created,
             "skipped": skipped,
             "pending_count": pending_count,
+            "reviewed_count": reviewed_count,
+            "total_count": total_count,
             "export_from": export_from,
             "export_to": export_to,
             "pending_in_export_window": pending_in_export_window,

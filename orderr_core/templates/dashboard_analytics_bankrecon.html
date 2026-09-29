@@ -95,7 +95,7 @@ input.party-search.linked{border-color:var(--green-border);background:var(--gree
 
   <div class="section-head">
     <div class="section-title">🏦 Bank recon — daily transaction categorization</div>
-    <div class="section-sub">{{ pending_count }} pending row(s)</div>
+    <div class="section-sub"><b id="pendingBig" style="font-size:20px;color:var(--red,#b91c1c);letter-spacing:-.3px">{{ pending_count }}</b> pending row(s)</div>
   </div>
 
   {% if flash == 'bank_ok' %}
@@ -135,9 +135,9 @@ input.party-search.linked{border-color:var(--green-border);background:var(--gree
   </div>
 
   <div class="tabs">
-    <a href="?show=pending" class="{{ 'active' if show=='pending' else '' }}">Pending</a>
-    <a href="?show=reviewed" class="{{ 'active' if show=='reviewed' else '' }}">Reviewed</a>
-    <a href="?show=all" class="{{ 'active' if show=='all' else '' }}">All</a>
+    <a href="?show=pending" class="{{ 'active' if show=='pending' else '' }}">Pending (<span id="pendingTab">{{ pending_count }}</span>)</a>
+    <a href="?show=reviewed" class="{{ 'active' if show=='reviewed' else '' }}">Reviewed ({{ reviewed_count }})</a>
+    <a href="?show=all" class="{{ 'active' if show=='all' else '' }}">All ({{ total_count }})</a>
   </div>
 
   {% if not txns %}
@@ -157,7 +157,7 @@ input.party-search.linked{border-color:var(--green-border);background:var(--gree
       </tr></thead>
       <tbody id="body">
       {% for t in txns %}
-        <tr class="{{ t.direction }}" data-id="{{ t.id }}" data-cpkey="{{ t.counterparty_key }}" data-relay="{{ '1' if t.is_relay else '0' }}"
+        <tr class="{{ t.direction }}" data-id="{{ t.id }}" data-cpkey="{{ t.counterparty_key }}" data-relay="{{ '1' if t.is_relay else '0' }}" data-reviewed="{{ '1' if t.reviewed else '0' }}"
             data-party-type="{{ t.party_type }}" data-party-id="{{ t.party_id }}" data-party-label="{{ t.party_label }}">
           <td>{{ t.value_date }}</td>
           <td class="desc" title="{{ t.description }}">{{ t.description }}</td>
@@ -223,6 +223,14 @@ input.party-search.linked{border-color:var(--green-border);background:var(--gree
 
 <script>
 const ALL_PARTIES = {{ parties_json | safe }};
+
+// Keep the pending numbers in step with saves without a reload.
+function adjustPending(delta){
+  ['pendingBig','pendingTab'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = Math.max(0, (parseInt(el.textContent, 10) || 0) + delta);
+  });
+}
 
 function quickPick(btn, hotel){
   const tr = btn.closest('tr');
@@ -320,12 +328,14 @@ async function saveRow(btn){
   if (!category){ alert('Pick a category first.'); return; }
   const cb = tr.querySelector('.remembercb');
   const saveAlias = cb ? cb.checked : false;
+  const wasReviewed = tr.getAttribute('data-reviewed') === '1';
   btn.disabled = true; btn.textContent = 'Saving…';
   try{
     await postCategorize([tr.getAttribute('data-id')], category, remark, saveAlias, tr.getAttribute('data-cpkey'), currentParty(tr));
     tr.style.opacity = '.5';
     tr.querySelectorAll('select,input,button').forEach(el => el.disabled = true);
     btn.textContent = '✓ Saved';
+    if (!wasReviewed) adjustPending(-1);
     if (saveAlias) prefillMatching(tr, category, remark);
   }catch(e){
     alert('Could not save: ' + e.message);
@@ -397,6 +407,7 @@ async function applyToMatching(btn){
   const ids = matches.map(r => r.getAttribute('data-id'));
   try{
     await postCategorize(ids, category, remark, true, key, currentParty(tr));
+    adjustPending(-matches.filter(r => r.getAttribute('data-reviewed') !== '1').length);
     matches.forEach(r => {
       r.style.opacity = '.5';
       r.querySelectorAll('select,input,button').forEach(el => el.disabled = true);
