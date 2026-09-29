@@ -160,7 +160,7 @@ tr.parked .park{background:var(--amber);border-color:var(--amber);color:#fff}
       btn.dataset.on=on?'1':'0'; btn.textContent=on?'🅿 Parked':'Park'; tr.classList.toggle('parked',on); setCount(on?1:-1);
       if(showOnly&&!on) tr.style.display='none';
     }).catch(function(){alert('Could not save — try again.');}).then(function(){btn.disabled=false;});
-  });
+  }, true);  // capture: the cell stops propagation so the row's open-Bank-Recon click doesn't fire
   document.getElementById('copyMarked').addEventListener('click',function(){
     var lines=[];
     document.querySelectorAll('tr.row.parked').forEach(function(tr){
