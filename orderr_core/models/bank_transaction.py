@@ -61,6 +61,12 @@ class BankTransaction(Base):
     reviewed_by: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # "Send to accounts" mark from the Missing-entries page — separate from
+    # `reviewed` (bank-recon categorization done), so marking one never
+    # touches the other.
+    flagged_for_review: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    flagged_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # Optional supporting bill/receipt photo, stored in the same dedicated
     # Drive account as sundries invoices (see services/google_drive.py) —
     # only the pointer lives here, never the file bytes.

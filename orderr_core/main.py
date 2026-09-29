@@ -459,6 +459,32 @@ def _ensure_bank_transaction_bill_columns():
 _ensure_bank_transaction_bill_columns()
 
 
+def _ensure_bank_transaction_flag_columns():
+    """Add bank_transactions.flagged_for_review/flagged_at to a pre-existing
+    table if missing — the Missing-entries page's "mark for review" list.
+    Idempotent."""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    if "bank_transactions" not in insp.get_table_names():
+        return  # fresh DB — create_all already made the columns
+    cols = {c["name"] for c in insp.get_columns("bank_transactions")}
+    ts_type = ("TIMESTAMP WITH TIME ZONE"
+               if engine.dialect.name == "postgresql" else "DATETIME")
+    default = "FALSE" if engine.dialect.name == "postgresql" else "0"
+    with engine.begin() as conn:
+        if "flagged_for_review" not in cols:
+            conn.execute(text(
+                f"ALTER TABLE bank_transactions ADD COLUMN flagged_for_review BOOLEAN NOT NULL DEFAULT {default}"))
+            print("Migration: added bank_transactions.flagged_for_review column")
+        if "flagged_at" not in cols:
+            conn.execute(text(f"ALTER TABLE bank_transactions ADD COLUMN flagged_at {ts_type}"))
+            print("Migration: added bank_transactions.flagged_at column")
+
+
+_ensure_bank_transaction_flag_columns()
+
+
 def _ensure_critical_note_attachment_columns():
     """Add critical_notes.attachment_drive_file_id/attachment_drive_link/
     attachment_filename (nullable) to a pre-existing table if missing —

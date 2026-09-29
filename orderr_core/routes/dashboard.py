@@ -1221,11 +1221,14 @@ def analytics_missing_entries(
     request: Request,
     from_: str = Query(default=None, alias="from"),
     to: str = Query(default=None),
+    marked: int = Query(default=0),
     db: Session = Depends(get_db),
     username: str = Depends(require_auth),
 ):
     """Bank transactions with no matching Vasy receipt/payment — money that
-    moved through the account (in or out) but was never logged in Vasy."""
+    moved through the account (in or out) but was never logged in Vasy.
+    Rows can be marked for review (to send to the accounts team); marked=1
+    shows only those."""
     from datetime import date as _date
     from orderr_core.services import analytics_service
 
@@ -1242,7 +1245,8 @@ def analytics_missing_entries(
             to_date = _date.fromisoformat(to)
         except ValueError:
             to_date = None
-    data = analytics_service.bank_gaps(db, from_date=from_date, to_date=to_date, today=today)
+    data = analytics_service.bank_gaps(db, from_date=from_date, to_date=to_date, today=today,
+                                       marked_only=bool(marked))
 
     return templates.TemplateResponse(
         request=request,
@@ -1254,6 +1258,60 @@ def analytics_missing_entries(
             "analytics_view": "missing_entries",
         },
     )
+
+
+@router.post("/analytics/missing-entries/flag")
+def analytics_missing_entries_flag(
+    txn_id: int = Form(...),
+    flagged: int = Form(...),
+    db: Session = Depends(get_db),
+    username: str = Depends(require_auth),
+):
+    """Mark / unmark one bank transaction for review by the accounts team."""
+    from orderr_core.models.bank_transaction import BankTransaction
+
+    t = db.get(BankTransaction, txn_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="Bank transaction not found")
+    t.flagged_for_review = bool(flagged)
+    t.flagged_at = datetime.now(timezone.utc) if flagged else None
+    db.commit()
+    return JSONResponse({"id": t.id, "flagged": t.flagged_for_review})
+
+
+@router.get("/analytics/missing-entries/export")
+def analytics_missing_entries_export(
+    from_: str = Query(default=None, alias="from"),
+    to: str = Query(default=None),
+    db: Session = Depends(get_db),
+    username: str = Depends(require_auth),
+):
+    """CSV of the marked, still-unmatched entries for the range — the list to
+    hand to the accounts team."""
+    import csv
+    import io
+    from datetime import date as _date
+    from fastapi.responses import Response
+    from orderr_core.services import analytics_service
+
+    def _d(s):
+        try:
+            return _date.fromisoformat(s) if s else None
+        except ValueError:
+            return None
+
+    data = analytics_service.bank_gaps(db, from_date=_d(from_), to_date=_d(to),
+                                       today=get_current_business_date(), marked_only=True)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Date", "Type", "Counterparty", "Description", "Amount"])
+    for label, rows in (("Money IN - no receipt in Vasy", data["missing_receipts"]),
+                        ("Money OUT - no payment in Vasy", data["missing_payments"])):
+        for r in rows:
+            w.writerow([r["date_iso"], label, r["counterparty"], r["description"], r["amount_raw"]])
+    fname = f"missing_entries_{data['from_date']}_to_{data['to_date']}.csv"
+    return Response(content=buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
 @router.get("/analytics/admin/diagnose-matching")

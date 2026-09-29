@@ -4027,8 +4027,11 @@ def _match_bank_side(bank_rows, candidates, amount_of, date_of):
     return [t for bi, t in enumerate(bank_rows) if bi not in used_bank]
 
 
-def bank_gaps(db: Session, from_date: date = None, to_date: date = None, today: date = None) -> dict:
-    """Bank transactions with no matching Vasy receipt/payment for the range."""
+def bank_gaps(db: Session, from_date: date = None, to_date: date = None, today: date = None,
+              marked_only: bool = False) -> dict:
+    """Bank transactions with no matching Vasy receipt/payment for the range.
+    marked_only keeps just the rows flagged for review (the KPI counts and
+    totals then describe that filtered list too)."""
     if today is None:
         from orderr_core.dates import get_current_business_date
         today = get_current_business_date()
@@ -4057,10 +4060,17 @@ def bank_gaps(db: Session, from_date: date = None, to_date: date = None, today: 
 
     missing_receipts = _match_bank_side(credits, receipts, lambda r: r.amount, lambda r: r.receipt_date)
     missing_payments = _match_bank_side(debits, payments, lambda p: p.amount, lambda p: p.payment_date)
+    marked_count = sum(1 for t in missing_receipts + missing_payments if t.flagged_for_review)
+    if marked_only:
+        missing_receipts = [t for t in missing_receipts if t.flagged_for_review]
+        missing_payments = [t for t in missing_payments if t.flagged_for_review]
 
     def _row(t):
         return {
             "id": t.id,
+            "flagged": bool(t.flagged_for_review),
+            "date_iso": t.value_date.isoformat() if t.value_date else "",
+            "amount_raw": float(t.amount or 0),
             "date_display": t.value_date.strftime("%d %b") if t.value_date else "",
             "amount_fmt": fmt_inr(t.amount),
             "description": t.description or "",
@@ -4074,6 +4084,8 @@ def bank_gaps(db: Session, from_date: date = None, to_date: date = None, today: 
         "to_date": to_date.isoformat(),
         "credits_checked": len(credits),
         "debits_checked": len(debits),
+        "marked_only": marked_only,
+        "marked_count": marked_count,
         "missing_receipts": [_row(t) for t in missing_receipts],
         "missing_payments": [_row(t) for t in missing_payments],
         "missing_receipts_total_fmt": fmt_inr(sum(float(t.amount or 0) for t in missing_receipts)),
