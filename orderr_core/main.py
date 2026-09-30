@@ -252,6 +252,26 @@ def _ensure_customer_credit_limit_column():
 _ensure_customer_credit_limit_column()
 
 
+def _ensure_customer_is_favorite_column():
+    """Add customers.is_favorite (BOOLEAN NOT NULL DEFAULT false) if missing —
+    the dashboard's star/favourite-to-top feature. Idempotent."""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    if "customers" not in insp.get_table_names():
+        return
+    cols = {c["name"] for c in insp.get_columns("customers")}
+    if "is_favorite" in cols:
+        return
+    default = "FALSE" if engine.dialect.name == "postgresql" else "0"
+    with engine.begin() as conn:
+        conn.execute(text(f"ALTER TABLE customers ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT {default}"))
+    print("✅ Migration: added customers.is_favorite column")
+
+
+_ensure_customer_is_favorite_column()
+
+
 def _ensure_invoice_printed_at_column():
     """Add invoices.printed_at (nullable) if missing — powers print tracking so
     "Print all" only prints newly-invoiced bills. Nullable, so a plain ADD COLUMN

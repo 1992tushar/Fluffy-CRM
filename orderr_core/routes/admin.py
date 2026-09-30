@@ -96,6 +96,9 @@ class CustomerAssign(BaseModel):
 class CustomerStatus(BaseModel):
     is_active: bool
 
+class CustomerFavorite(BaseModel):
+    is_favorite: bool
+
 class CustomerCreate(BaseModel):
     phone: str
     restaurant_name: str
@@ -686,6 +689,7 @@ def _customer_row(c: Customer, db: Session) -> dict:
         "created_at": c.created_at.isoformat() if c.created_at else None,
         "outstanding": float(c.outstanding) if c.outstanding is not None else 0.0,
         "has_phone": bool(c.phone_number),
+        "is_favorite": bool(c.is_favorite),
     }
 
 
@@ -918,6 +922,17 @@ def update_customer_status(customer_id: int, payload: CustomerStatus, db: Sessio
         "id": customer.id, "restaurant_name": customer.restaurant_name,
         "phone_number": customer.phone_number, "is_active": customer.is_active,
     }}
+
+
+@router.put("/customers/{customer_id}/favorite")
+def set_customer_favorite(customer_id: int, payload: CustomerFavorite, db: Session = Depends(get_db), username: str = Depends(require_auth)):
+    """Star / un-star a customer — favourites sort to the top of the list."""
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    customer.is_favorite = payload.is_favorite
+    db.commit()
+    return {"id": customer.id, "is_favorite": customer.is_favorite}
 
 
 @router.put("/customers/{customer_id}")

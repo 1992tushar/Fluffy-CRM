@@ -118,6 +118,15 @@ class Customer(Base):
         nullable=True,
     )
 
+    # Starred on the dashboard Customers tab — favourites sort to the top.
+    # Shared across everyone using the dashboard (stored here, not per browser).
+    is_favorite = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="0",
+    )
+
     # Relationship
     salesperson = relationship("Salesperson", back_populates="customers")
 

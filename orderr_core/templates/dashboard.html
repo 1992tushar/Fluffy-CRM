@@ -321,6 +321,9 @@
         .customer-search-input::placeholder { color:#bbb; }
         .customer-search-clear { background:none; border:none; cursor:pointer; font-size:16px; color:#bbb; padding:0 2px; line-height:1; display:none; }
         .customer-search-clear.visible { display:block; color:#888; }
+        .fav-btn { background:none; border:none; cursor:pointer; font-size:18px; line-height:1; padding:0 6px 0 0; color:#c9c9c9; vertical-align:middle; }
+        .fav-btn:hover { color:#f5a623; }
+        .fav-btn.on { color:#f5a623; }
         .customer-search-count { font-size:12px; color:#075e54; font-weight:600; white-space:nowrap; }
     </style>
     </style>
@@ -1419,6 +1422,8 @@ function sortCustomersForDisplay(list) {
     const mul = (dir === 'asc') ? 1 : -1;
     const arr = list.slice();
     arr.sort((a, b) => {
+        // Starred customers always float to the top, whatever the sort column/direction.
+        if (!!a.is_favorite !== !!b.is_favorite) return a.is_favorite ? -1 : 1;
         const av = _customerSortValue(a, key), bv = _customerSortValue(b, key);
         let cmp;
         if (typeof av === 'number' && typeof bv === 'number') cmp = av - bv;
@@ -1476,6 +1481,23 @@ function updateSortIndicators() {
     if (dirBtn) dirBtn.textContent = (dir === 'asc') ? '▲ Asc' : '▼ Desc';
 }
 
+function favBtn(c) {
+    return `<button class="fav-btn${c.is_favorite ? ' on' : ''}" title="${c.is_favorite ? 'Remove from favourites' : 'Add to favourites (pins to top)'}" onclick="toggleFavorite(${c.id})">${c.is_favorite ? '★' : '☆'}</button>`;
+}
+
+async function toggleFavorite(cid) {
+    const c = (window._allCustomers || []).find(x => x.id === cid);
+    if (!c) return;
+    const want = !c.is_favorite;
+    try {
+        await api('PUT', `/admin/customers/${cid}/favorite`, { is_favorite: want });
+        c.is_favorite = want;
+        reRenderCustomers();
+    } catch (e) {
+        showToast('Could not update favourite: ' + (e.message || e), 'error');
+    }
+}
+
 function renderCustomerRows(customers) {
     customers = sortCustomersForDisplay(customers);
     _visibleCustomers = customers;   // what select-all operates on
@@ -1497,7 +1519,7 @@ function renderCustomerRows(customers) {
             const rowStyle = noPhone ? ' style="background:#fff5f5"' : '';
             return `<tr${rowStyle}>
                 <td style="text-align:center"><input type="checkbox" class="cust-check" value="${c.id}"${checked} onclick="onCustomerCheck(${c.id},this.checked)"/></td>
-                <td><strong style="${noPhone?'color:#c62828':''}">${esc(c.restaurant_name||'—')}</strong></td>
+                <td>${favBtn(c)}<strong style="${noPhone?'color:#c62828':''}">${esc(c.restaurant_name||'—')}</strong></td>
                 <td style="font-size:12px">${phoneCell}</td>
                 <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtMoney(c.outstanding)}</td>
                 <td>${esc(c.area||'')}</td>
@@ -1533,7 +1555,7 @@ function renderCustomerRows(customers) {
                 <div style="display:flex;gap:10px;align-items:flex-start">
                     <input type="checkbox" class="cust-check" value="${c.id}"${checked} onclick="onCustomerCheck(${c.id},this.checked)" style="margin-top:3px"/>
                     <div>
-                        <div class="mobile-card-name" style="${noPhone?'color:#c62828':''}">${esc(c.restaurant_name||'—')}</div>
+                        <div class="mobile-card-name" style="${noPhone?'color:#c62828':''}">${favBtn(c)}${esc(c.restaurant_name||'—')}</div>
                         <div class="mobile-card-sub">${phoneText}${c.area?' · '+esc(c.area):''} · ${spText}</div>
                         <div class="mobile-card-sub">${outText}</div>
                     </div>
