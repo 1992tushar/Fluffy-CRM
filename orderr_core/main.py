@@ -583,12 +583,15 @@ async def lifespan(app: FastAPI):
     hour, minute = map(int, report_time.split(":"))
     scheduler    = BackgroundScheduler()
 
-    # Daily report (configurable via REPORT_TIME env var)
-    scheduler.add_job(
-        daily_report_job,
-        CronTrigger(hour=hour, minute=minute, timezone="Asia/Kolkata"),
-        id="daily_report", name=f"Daily Report at {report_time} IST",
-    )
+    # Daily report (configurable via REPORT_TIME env var).
+    # Disabled 2026-09-30 — set DAILY_REPORT_ENABLED=true to turn it back on.
+    daily_report_enabled = os.getenv("DAILY_REPORT_ENABLED", "false").lower() == "true"
+    if daily_report_enabled:
+        scheduler.add_job(
+            daily_report_job,
+            CronTrigger(hour=hour, minute=minute, timezone="Asia/Kolkata"),
+            id="daily_report", name=f"Daily Report at {report_time} IST",
+        )
 
     # Customer reminders: auto-send removed 2026-07-14 — now manual via the
     # 📣 Broadcast screen (owner-curated list, /dashboard/broadcast).
@@ -637,7 +640,10 @@ async def lifespan(app: FastAPI):
     app.state.scheduler = scheduler
 
     print("\n✅ OrdeRR Scheduler Started!")
-    print(f"   📅 Daily report (email)  → Every day at {report_time} IST")
+    if daily_report_enabled:
+        print(f"   📅 Daily report (email)  → Every day at {report_time} IST")
+    else:
+        print("   📅 Daily report (email)  → DISABLED (DAILY_REPORT_ENABLED)")
     print(f"   📣 Customer reminders    → Manual only (Broadcast screen)")
     print(f"   📋 Salesperson alerts    → Every day at 23:15 IST")
     print(f"   📊 Manager reports       → Live status page (/r/…)")
