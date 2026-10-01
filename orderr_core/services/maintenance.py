@@ -44,6 +44,8 @@ CLEAR_TABLES = [
     "outstanding_snapshots",
     "vasy_invoice_history",
     "ledger_deletion_history",
+    "invoice_edit_history",
+    "vasy_line_snapshot",
     "vasy_invoices",
     "vasy_sales_items",
     "vasy_purchases",

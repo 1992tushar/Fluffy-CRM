@@ -923,6 +923,12 @@ def import_sales_items(db: Session, file_bytes: bytes, source_file: str = None) 
     # Vasy) — captured BEFORE the snapshot-replace below discards that history.
     history_result = _update_invoice_history(db, vouchers, voucher_cid)
 
+    # ── Rate/qty edit audit: diff each voucher's lines against the previous
+    # sync's snapshot (and, for brand-new vouchers, against the OrdeRR invoice
+    # that produced them) — also must run before the mirror is rebuilt/lost.
+    from orderr_core.services.invoice_edit_audit import record_vasy_sync_edits
+    edit_result = record_vasy_sync_edits(db, lines, vouchers, voucher_cid)
+
     # ── Rebuild VasyInvoice (revenue source of truth) from voucher totals ────
     # Replaces the flaky client-side /sales/invoice export: identical revenue,
     # but sourced from the reliable server-side register.
@@ -956,7 +962,7 @@ def import_sales_items(db: Session, file_bytes: bytes, source_file: str = None) 
                      notes=(f"invoices={len(vouchers)}; total_net={round(total_net, 2)}; "
                             f"skus={len(skus)}; auto_created={auto_created}; "
                             f"zero_internal={zero_internal}; receipts_relinked={relinked}; "
-                            f"disappeared={disappeared}")))
+                            f"disappeared={disappeared}; line_edits={edit_result['edits']}")))
     db.commit()
 
     return {

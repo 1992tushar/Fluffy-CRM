@@ -332,6 +332,11 @@ def reissue_invoice(db: Session, order_id: int, refresh_rates: bool = False) -> 
 
     # Replace the line items in place (cascade delete-orphan clears the old rows)
     # and update the totals — the invoice_number and order_id are untouched.
+    # Audit trail: record any line that changed vs the invoice as it stood
+    # (old rows are about to be discarded, rate_used included).
+    from orderr_core.services.invoice_edit_audit import snapshot_invoice_lines, log_reissue_edit
+    log_reissue_edit(db, invoice, snapshot_invoice_lines(invoice), items_data)
+
     invoice.items.clear()
     db.flush()
     for item in items_data:

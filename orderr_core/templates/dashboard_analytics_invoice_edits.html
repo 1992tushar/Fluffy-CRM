@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ plant_name }} · Edited invoices</title>
+<style>
+:root{
+  --ink:#1a1a18;--ink2:#5a5a54;--ink3:#9a9a90;
+  --bg:#f4f3ef;--surface:#fff;--border:rgba(0,0,0,0.09);--border-strong:rgba(0,0,0,0.15);
+  --green:#1a6b41;--green-bg:#e8f5ee;--green-border:#b6ddc8;
+  --amber:#92540a;--amber-bg:#fef3c7;--amber-border:#f5cc6e;
+  --red:#b91c1c;--red-bg:#fee2e2;--red-border:#fca5a5;
+  --blue:#1b4fba;--blue-bg:#eff4ff;--blue-border:#b3c8f7;
+  --r:10px;--shadow:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.05);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;background:var(--bg);color:var(--ink);min-height:100vh}
+.nav{display:flex;align-items:center;background:var(--surface);border-bottom:1px solid var(--border);padding:0 20px;height:52px;position:sticky;top:0;z-index:100;box-shadow:var(--shadow)}
+.nav-back{display:flex;align-items:center;gap:4px;font-size:13px;font-weight:500;color:var(--ink3);text-decoration:none;margin-right:14px;padding:4px 8px;border-radius:6px}
+.nav-back:hover{color:var(--green);background:var(--bg)}
+.nav-logo{font-weight:700;font-size:15px;color:var(--green);display:flex;align-items:center;gap:6px}
+.nav-right{margin-left:auto}
+.date-chip{font-size:12px;color:var(--ink3);background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:4px 12px}
+main{max-width:1100px;margin:0 auto;padding:24px 18px 80px}
+.section-title{font-size:15px;font-weight:700;margin:6px 2px 12px}
+.note{font-size:12px;color:var(--ink3);background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--blue-border);border-radius:8px;padding:10px 14px;margin-bottom:16px}
+.stat-row{display:flex;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:14px 20px;min-width:160px}
+.stat .n{font-size:22px;font-weight:800}
+.stat .l{font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+.wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{background:var(--bg);color:var(--ink2);text-align:left;padding:9px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);white-space:nowrap}
+th.num,td.num{text-align:right;font-variant-numeric:tabular-nums}
+td{padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+tr:last-child td{border-bottom:none}
+.tag{display:inline-block;font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px;text-transform:uppercase}
+.tag.receipt{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+.tag.sales_invoice{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
+.tag.purchase,.tag.expense,.tag.payment{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)}
+tr.reduced td{background:var(--red-bg)}
+.neg{color:var(--red);font-weight:700}
+.pos{color:var(--green);font-weight:700}
+.empty{color:var(--ink3);text-align:center;padding:22px}
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <a href="/dashboard/" class="nav-back">← Dashboard</a>
+  <span class="nav-logo">📊 {{ plant_name }} Analytics</span>
+  <div class="nav-right"><span class="date-chip">{{ current_time }}</span></div>
+</div>
+
+<main>
+  {% include "_analytics_subnav.html" %}
+
+  <div class="section-title">✏️ Edited invoices</div>
+  <div class="note">
+    Every invoice line whose rate or quantity changed after it was first entered. Three sources:
+    <b>Vasy edit</b> = changed in Vasy between two nightly syncs; <b>OrdeRR edit</b> = bill reissued
+    in OrdeRR with different lines; <b>Differs from OrdeRR</b> = the voucher already differed from the
+    OrdeRR invoice the first time it appeared in Vasy. Rows in red are <b>reductions</b> (the bill went
+    down). Edits are detected at sync time, so a change made and reverted between two syncs is not seen.
+    History starts from when this feature was deployed.
+  </div>
+
+  <div class="stat-row">
+    <div class="stat"><div class="n">{{ rows|length }}</div><div class="l">Edits (90d)</div></div>
+    <div class="stat"><div class="n" style="color:var(--red)">{{ reduced_count }}</div><div class="l">Reductions</div></div>
+    <div class="stat"><div class="n" style="color:var(--red)">{{ reduced_total_fmt }}</div><div class="l">Total reduced</div></div>
+  </div>
+
+  <div class="wrap"><div class="scroll">
+    <table>
+      <thead><tr>
+        <th>Detected</th><th>Source</th><th>Voucher</th><th>Customer</th><th>Date</th><th>Product</th>
+        <th>Change</th><th class="num">Qty (old → new)</th><th class="num">Rate (old → new)</th><th class="num">Impact</th>
+      </tr></thead>
+      <tbody>
+        {% for r in rows %}
+        <tr class="{{ 'reduced' if r.reduced else '' }}">
+          <td>{{ r.detected_at }}</td>
+          <td>{{ {'vasy': 'Vasy edit', 'orderr': 'OrdeRR edit', 'orderr_vs_vasy': 'Differs from OrdeRR'}.get(r.source, r.source) }}</td>
+          <td>{{ r.voucher_no }}</td>
+          <td>{{ r.party_name }}</td>
+          <td>{{ r.invoice_date }}</td>
+          <td>{{ r.product_name }}</td>
+          <td>{{ r.change_type }}</td>
+          <td class="num">{{ r.old_qty or '–' }} → {{ r.new_qty or '–' }}</td>
+          <td class="num">{{ r.old_rate or '–' }} → {{ r.new_rate or '–' }}</td>
+          <td class="num {{ 'neg' if r.reduced else 'pos' }}">{{ r.impact_fmt }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" class="empty">No edited invoices in the last 90 days. 👍</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div></div>
+</main>
+</body>
+</html>

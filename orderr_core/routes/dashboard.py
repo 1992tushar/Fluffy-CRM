@@ -1509,6 +1509,50 @@ def analytics_ledger_deletions(
     )
 
 
+@router.get("/analytics/invoice-edits", response_class=HTMLResponse)
+def analytics_invoice_edits(
+    request: Request,
+    db: Session = Depends(get_db),
+    username: str = Depends(require_auth),
+):
+    """Invoice lines whose rate/qty changed after first entry — reductions
+    (the bill went down) are highlighted as the pattern to investigate."""
+    from orderr_core.services.invoice_edit_audit import invoice_edits_report
+    from orderr_core.services.vasy_import import _fmt_inr_local
+
+    def n(v, fmt="{:,.2f}"):
+        return "" if v is None else fmt.format(v)
+
+    rows = invoice_edits_report(db)
+    formatted = [{
+        "source": r["source"],
+        "voucher_no": r["voucher_no"],
+        "party_name": r["party_name"],
+        "invoice_date": r["invoice_date"].strftime("%d %b %Y") if r["invoice_date"] else "",
+        "product_name": r["product_name"],
+        "change_type": r["change_type"],
+        "old_qty": n(r["old_qty"], "{:,.3f}"), "new_qty": n(r["new_qty"], "{:,.3f}"),
+        "old_rate": n(r["old_rate"]), "new_rate": n(r["new_rate"]),
+        "impact_fmt": _fmt_inr_local(r["impact"]),
+        "reduced": r["reduced"],
+        "detected_at": r["detected_at"].astimezone(IST).strftime("%d %b %Y %I:%M %p") if r["detected_at"] else "",
+    } for r in rows]
+    reduced = [r for r in rows if r["reduced"]]
+
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard_analytics_invoice_edits.html",
+        context={
+            "plant_name": PLANT_NAME,
+            "current_time": datetime.now(IST).strftime("%d %b %Y, %I:%M %p"),
+            "rows": formatted,
+            "reduced_count": len(reduced),
+            "reduced_total_fmt": _fmt_inr_local(-sum(r["impact"] for r in reduced)),
+            "analytics_view": "invoice_edits",
+        },
+    )
+
+
 @router.post("/analytics/import/receipts")
 async def analytics_import_receipts(
     file: UploadFile = File(...),

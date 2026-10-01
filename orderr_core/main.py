@@ -62,6 +62,7 @@ from orderr_core.models.import_log import ImportLog                 # noqa: F401
 from orderr_core.models.vasy_invoice import VasyInvoice, VasyInvoiceItem  # noqa: F401
 from orderr_core.models.vasy_invoice_history import VasyInvoiceHistory     # noqa: F401
 from orderr_core.models.ledger_deletion_history import LedgerDeletionHistory  # noqa: F401
+from orderr_core.models.invoice_edit_history import InvoiceEditHistory, VasyLineSnapshot  # noqa: F401
 from orderr_core.models.vasy_purchase import VasyPurchase, VasyPurchaseItem  # noqa: F401
 from orderr_core.models.vasy_expense import VasyExpense                 # noqa: F401
 from orderr_core.models.vasy_payment import VasyPayment                 # noqa: F401
