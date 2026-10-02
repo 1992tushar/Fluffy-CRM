@@ -616,26 +616,32 @@ async def lifespan(app: FastAPI):
         id="manager_digest", name=f"Manager Analytics Digest at {digest_time} IST",
     )
 
-    # Keep-alive ping — every 10 min (prevents Render spin-down)
-    scheduler.add_job(
-        lambda: print("💓 keep-alive ping"),
-        IntervalTrigger(minutes=10),
-        id="keep_alive", name="Keep-Alive Ping",
-    )
+    # WhatsApp webhook jobs (retry + health check) and the keep-alive ping.
+    # Disabled 2026-10-02 — the webhook integration was removed and orders are
+    # entered manually, so these only polled an empty inbound_messages table.
+    # Set WEBHOOK_JOBS_ENABLED=true to turn them back on.
+    webhook_jobs_enabled = os.getenv("WEBHOOK_JOBS_ENABLED", "false").lower() == "true"
+    if webhook_jobs_enabled:
+        # Keep-alive ping — every 10 min (prevents Render spin-down)
+        scheduler.add_job(
+            lambda: print("💓 keep-alive ping"),
+            IntervalTrigger(minutes=10),
+            id="keep_alive", name="Keep-Alive Ping",
+        )
 
-    # Retry failed messages — every 1 min (reliability layer)
-    scheduler.add_job(
-        retry_failed_messages_job,
-        IntervalTrigger(minutes=1),
-        id="retry_failed_messages", name="Retry Failed Messages",
-    )
+        # Retry failed messages — every 1 min (reliability layer)
+        scheduler.add_job(
+            retry_failed_messages_job,
+            IntervalTrigger(minutes=1),
+            id="retry_failed_messages", name="Retry Failed Messages",
+        )
 
-    # Webhook health check — every 30 min (reliability layer)
-    scheduler.add_job(
-        webhook_health_job,
-        IntervalTrigger(minutes=30),
-        id="webhook_health", name="Webhook Health Check",
-    )
+        # Webhook health check — every 30 min (reliability layer)
+        scheduler.add_job(
+            webhook_health_job,
+            IntervalTrigger(minutes=30),
+            id="webhook_health", name="Webhook Health Check",
+        )
 
     scheduler.start()
     app.state.scheduler = scheduler
@@ -648,9 +654,12 @@ async def lifespan(app: FastAPI):
     print(f"   📣 Customer reminders    → Manual only (Broadcast screen)")
     print(f"   📋 Salesperson alerts    → Every day at 23:15 IST")
     print(f"   📊 Manager reports       → Live status page (/r/…)")
-    print(f"   💓 Keep-alive ping       → Every 10 minutes")
-    print(f"   🔁 Retry failed msgs     → Every 1 minute")
-    print(f"   🩺 Webhook health check  → Every 30 minutes\n")
+    if webhook_jobs_enabled:
+        print(f"   💓 Keep-alive ping       → Every 10 minutes")
+        print(f"   🔁 Retry failed msgs     → Every 1 minute")
+        print(f"   🩺 Webhook health check  → Every 30 minutes\n")
+    else:
+        print("   🔁 Webhook jobs          → DISABLED (WEBHOOK_JOBS_ENABLED)\n")
 
     yield
 
