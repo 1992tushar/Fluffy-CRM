@@ -124,6 +124,30 @@ def dashboard(
                       for i in o.items_parsed if isinstance(i, dict)],
         })
 
+    # Reverse view for the popup opened by clicking a product row: which hotels
+    # ordered it (same product+unit key as the summaries; billed flag lets the
+    # "pending" lists show only unbilled orders, area lets a route card show
+    # only its own hotels).
+    product_hotels = {}
+    for group in area_groups:
+        for o in group["orders"]:
+            for it in o.items_parsed:
+                if not isinstance(it, dict):
+                    continue
+                key = f"{it.get('product', 'Unknown')}__{it.get('unit', 'kg').lower()}"
+                rows = product_hotels.setdefault(key, [])
+                name = o.customer_name or o.customer_phone
+                billed = o.id in invoiced_order_ids
+                for r in rows:
+                    if r["phone"] == o.customer_phone and r["area"] == group["area"] and r["billed"] == billed:
+                        r["qty"] += it.get("quantity", 0)
+                        break
+                else:
+                    rows.append({"name": name, "phone": o.customer_phone, "area": group["area"],
+                                 "billed": billed, "qty": it.get("quantity", 0)})
+    for rows in product_hotels.values():
+        rows.sort(key=lambda r: -r["qty"])
+
     def _pending_items_for(orders):
         """Per-product breakdown (not just a total) of quantity not yet
         invoiced/billed, so the manager can see WHAT is pending, not just how
@@ -273,6 +297,7 @@ def dashboard(
             "grand_hotel_totals"     : grand_hotel_totals,
             "grand_hotel_pending"    : grand_hotel_pending,
             "hotel_orders"           : hotel_orders,
+            "product_hotels"         : product_hotels,
             "total_items"        : sum(len(o.items_parsed) for o in clear_orders),
             "target_date"        : target_date.isoformat(),
             "target_date_display": target_date.strftime("%d %b %Y"),

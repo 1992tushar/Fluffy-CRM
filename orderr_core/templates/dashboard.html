@@ -38,6 +38,8 @@
         .card details[open] summary.number { margin-bottom:6px; }
         .hotel-breakdown-table { width:100%; font-size:11px; text-align:left; }
         .hotel-breakdown-table td { padding:2px 0; }
+        .product-link { color:inherit; text-decoration:none; border-bottom:1px dotted #999; cursor:pointer; }
+        .product-link:hover { color:#075e54; border-bottom-color:#075e54; }
         .hotel-link { color:inherit; text-decoration:none; border-bottom:1px dotted #999; cursor:pointer; }
         .hotel-link:hover { color:#075e54; border-bottom-color:#075e54; }
         .hotel-modal-back { position:fixed; inset:0; background:rgba(0,0,0,.4); display:none; align-items:flex-start; justify-content:center; z-index:300; padding:40px 14px; overflow-y:auto; }
@@ -435,7 +437,7 @@
                 <summary style="cursor:pointer;font-size:11px;color:#c05621;">Show items ({{ grand_pending_items|length }})</summary>
                 <table style="width:100%;font-size:11px;margin-top:4px;">
                     {% for i in grand_pending_items %}
-                    <tr><td>{{ erp_name(i.product) }}</td><td style="text-align:right;white-space:nowrap;"><strong>{{ i.total_quantity }}</strong> {{ i.unit }}</td></tr>
+                    <tr><td><a href="#" class="product-link" data-key="{{ i.product }}__{{ i.unit }}" data-name="{{ erp_name(i.product) }}" data-scope="pending">{{ erp_name(i.product) }}</a></td><td style="text-align:right;white-space:nowrap;"><strong>{{ i.total_quantity }}</strong> {{ i.unit }}</td></tr>
                     {% endfor %}
                 </table>
             </details>
@@ -459,7 +461,7 @@
                 <summary style="cursor:pointer;font-size:11px;color:#c05621;">Pending: {{ group.pending_quantity }} ({{ group.pending_items|length }} item{{ 's' if group.pending_items|length != 1 else '' }})</summary>
                 <table style="width:100%;font-size:11px;margin-top:4px;">
                     {% for i in group.pending_items %}
-                    <tr><td>{{ erp_name(i.product) }}</td><td style="text-align:right;white-space:nowrap;"><strong>{{ i.total_quantity }}</strong> {{ i.unit }}</td></tr>
+                    <tr><td><a href="#" class="product-link" data-key="{{ i.product }}__{{ i.unit }}" data-name="{{ erp_name(i.product) }}" data-scope="pending" data-area="{{ group.area }}">{{ erp_name(i.product) }}</a></td><td style="text-align:right;white-space:nowrap;"><strong>{{ i.total_quantity }}</strong> {{ i.unit }}</td></tr>
                     {% endfor %}
                 </table>
                 {% if group.hotel_pending %}
@@ -503,7 +505,7 @@
                 <tbody>
                     {% if product_summary %}
                         {% for item in product_summary %}
-                        <tr><td>{{ erp_name(item.product) }}</td><td><strong>{{ item.total_quantity }}</strong>{% if item.pending_quantity %} / <span style="color:#e67e22">{{ item.pending_quantity }}</span>{% endif %}</td><td>{{ item.unit }}</td><td>{{ item.orders_count }}</td></tr>
+                        <tr><td><a href="#" class="product-link" data-key="{{ item.product }}__{{ item.unit }}" data-name="{{ erp_name(item.product) }}" data-scope="all">{{ erp_name(item.product) }}</a></td><td><strong>{{ item.total_quantity }}</strong>{% if item.pending_quantity %} / <span style="color:#e67e22">{{ item.pending_quantity }}</span>{% endif %}</td><td>{{ item.unit }}</td><td>{{ item.orders_count }}</td></tr>
                         {% endfor %}
                     {% else %}
                         <tr><td colspan="4" style="text-align:center;color:#aaa">No orders for this date</td></tr>
@@ -2527,9 +2529,43 @@ async function revertToToday(orderId) {
         }).join('');
         back.classList.add('open');
     }
+    // Product row → popup listing the hotels that ordered it (pending lists: unbilled only;
+    // a route card's list: that route's hotels only).
+    var PRODUCTS = {{ product_hotels | tojson }};
+    function openProduct(link) {
+        var key = link.getAttribute('data-key');
+        var unit = key.split('__').pop();
+        var pendingOnly = link.getAttribute('data-scope') === 'pending';
+        var area = link.getAttribute('data-area');
+        var rows = (PRODUCTS[key] || []).filter(function (r) {
+            return (!pendingOnly || !r.billed) && (!area || r.area === area);
+        });
+        var merged = {};
+        rows.forEach(function (r) {
+            var m = merged[r.phone] || (merged[r.phone] = { name: r.name, qty: 0, billed: true });
+            m.qty += r.qty;
+            if (!r.billed) m.billed = false;
+        });
+        var list = Object.keys(merged).map(function (k) { return merged[k]; })
+            .sort(function (a, b) { return b.qty - a.qty; });
+        var total = list.reduce(function (s, m) { return s + m.qty; }, 0);
+        document.getElementById('hotelModalTitle').firstChild.textContent = link.getAttribute('data-name');
+        document.getElementById('hotelModalSub').textContent =
+            list.length + (list.length === 1 ? ' hotel' : ' hotels') + ' · ' + total + ' ' + unit
+            + (pendingOnly ? ' pending' : '') + (area ? ' · ' + area : '') + ' · {{ target_date_display }}';
+        document.getElementById('hotelModalBody').innerHTML = '<div class="hotel-order"><table>'
+            + list.map(function (m) {
+                var tag = pendingOnly ? '' : (m.billed ? ' <span style="color:#1a6b41;font-weight:400">✓ billed</span>'
+                                                       : ' <span style="color:#c05621;font-weight:400">pending</span>');
+                return '<tr><td>' + esc(m.name) + tag + '</td><td>' + esc(m.qty) + ' ' + esc(unit) + '</td></tr>';
+            }).join('') + '</table></div>';
+        back.classList.add('open');
+    }
     document.addEventListener('click', function (e) {
         var link = e.target.closest('.hotel-link');
-        if (link) { e.preventDefault(); open(link.getAttribute('data-hotel')); }
+        if (link) { e.preventDefault(); open(link.getAttribute('data-hotel')); return; }
+        var plink = e.target.closest('.product-link');
+        if (plink) { e.preventDefault(); openProduct(plink); }
     });
     document.getElementById('hotelModalX').addEventListener('click', close);
     back.addEventListener('click', close);          // click anywhere (backdrop or card) closes
