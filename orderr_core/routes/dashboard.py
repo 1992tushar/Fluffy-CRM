@@ -107,6 +107,23 @@ def dashboard(
         ).all()
     } if clear_orders else set()
 
+    # Per-hotel order detail for the popup opened by clicking a hotel name in
+    # any stat-card breakdown (keyed by phone — names can collide).
+    from orderr_core.services.template_parser import erp_display_name
+    hotel_orders = {}
+    for o in sorted(clear_orders, key=lambda x: x.created_at):
+        h = hotel_orders.setdefault(o.customer_phone, {
+            "name": o.customer_name or o.customer_phone, "orders": []})
+        h["orders"].append({
+            "time": o.created_at.strftime("%I:%M %p") if o.created_at else "",
+            "delivery": " · ".join(x for x in (o.delivery_date, o.delivery_time) if x),
+            "billed": o.id in invoiced_order_ids,
+            "review": bool(getattr(o, "has_unclear_items", False)),
+            "items": [{"product": erp_display_name(i.get("product", "Unknown")),
+                       "qty": i.get("quantity", 0), "unit": i.get("unit", "")}
+                      for i in o.items_parsed if isinstance(i, dict)],
+        })
+
     def _pending_items_for(orders):
         """Per-product breakdown (not just a total) of quantity not yet
         invoiced/billed, so the manager can see WHAT is pending, not just how
@@ -255,6 +272,7 @@ def dashboard(
             "grand_pending_items"    : grand_pending_items,
             "grand_hotel_totals"     : grand_hotel_totals,
             "grand_hotel_pending"    : grand_hotel_pending,
+            "hotel_orders"           : hotel_orders,
             "total_items"        : sum(len(o.items_parsed) for o in clear_orders),
             "target_date"        : target_date.isoformat(),
             "target_date_display": target_date.strftime("%d %b %Y"),

@@ -40,7 +40,20 @@
         .hotel-breakdown-table td { padding:2px 0; }
         .hotel-link { color:inherit; text-decoration:none; border-bottom:1px dotted #999; cursor:pointer; }
         .hotel-link:hover { color:#075e54; border-bottom-color:#075e54; }
-        .order-card.hotel-flash { outline:3px solid #f6ad55; box-shadow:0 0 0 6px rgba(246,173,85,.35); transition:outline .3s; }
+        .hotel-modal-back { position:fixed; inset:0; background:rgba(0,0,0,.4); display:none; align-items:flex-start; justify-content:center; z-index:300; padding:40px 14px; overflow-y:auto; }
+        .hotel-modal-back.open { display:flex; }
+        .hotel-modal { background:#fff; border-radius:12px; box-shadow:0 12px 40px rgba(0,0,0,.25); width:100%; max-width:480px; overflow:hidden; }
+        .hotel-modal-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding:14px 18px; border-bottom:1px solid #e2e8f0; }
+        .hotel-modal-title { font-size:15px; font-weight:700; }
+        .hotel-modal-title .sub { display:block; font-size:12px; font-weight:500; color:#888; margin-top:2px; }
+        .hotel-modal-x { background:none; border:none; font-size:22px; line-height:1; color:#888; cursor:pointer; padding:0 4px; }
+        .hotel-modal-body { max-height:65vh; overflow-y:auto; padding:6px 18px 14px; }
+        .hotel-order { padding:10px 0; border-bottom:1px solid #edf2f7; }
+        .hotel-order:last-child { border-bottom:none; }
+        .hotel-order-meta { font-size:11px; color:#888; margin-bottom:4px; display:flex; justify-content:space-between; gap:8px; }
+        .hotel-order table { width:100%; font-size:13px; border-collapse:collapse; }
+        .hotel-order td { padding:2px 0; }
+        .hotel-order td:last-child { text-align:right; white-space:nowrap; padding-left:10px; font-weight:700; }
         .hotel-breakdown-table td:last-child { text-align:right; white-space:nowrap; padding-left:8px; }
 
         /* ── Section ── */
@@ -364,6 +377,16 @@
 </a>
 {% endif %}
 
+<div class="hotel-modal-back" id="hotelModalBack">
+  <div class="hotel-modal" role="dialog" aria-modal="true">
+    <div class="hotel-modal-head">
+      <div class="hotel-modal-title" id="hotelModalTitle">Hotel<span class="sub" id="hotelModalSub"></span></div>
+      <button class="hotel-modal-x" id="hotelModalX" aria-label="Close">×</button>
+    </div>
+    <div class="hotel-modal-body" id="hotelModalBody"></div>
+  </div>
+</div>
+
 <!-- ══════════════════════════════════════════════════════════════════════════
      ORDERS TAB
      ══════════════════════════════════════════════════════════════════════════ -->
@@ -494,7 +517,7 @@
             {% for group in area_groups %}
             <div class="area-header">📍 {{ group.area }} <span class="area-count">{{ group.orders|length }}</span> <span class="area-count" title="Total quantity (all products)">Σ {{ group.total_quantity }}</span></div>
             {% for order in group.orders %}
-            <div class="order-card{% if order.has_unclear_items %} needs-review{% endif %}" data-hotel="{{ order.customer_phone }}">
+            <div class="order-card{% if order.has_unclear_items %} needs-review{% endif %}">
                 {% if order.has_unclear_items %}
                 <div class="review-banner">⛔ CHECK ORDER — a product was dropped or a quantity couldn't be read. Verify against the original message below.</div>
                 {% endif %}
@@ -2480,20 +2503,38 @@ async function revertToToday(orderId) {
     }
 }
 
-// Hotel name in a stat-card breakdown → scroll to that hotel's order card(s) and flash them.
-document.addEventListener('click', function (e) {
-    var link = e.target.closest('.hotel-link');
-    if (!link) return;
-    e.preventDefault();
-    var phone = link.getAttribute('data-hotel');
-    var cards = Array.prototype.filter.call(
-        document.querySelectorAll('.order-card[data-hotel]'),
-        function (c) { return c.getAttribute('data-hotel') === phone; });
-    if (!cards.length) return;
-    cards[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
-    cards.forEach(function (c) { c.classList.add('hotel-flash'); });
-    setTimeout(function () { cards.forEach(function (c) { c.classList.remove('hotel-flash'); }); }, 2500);
-});
+// Hotel name in a stat-card breakdown → popup with that hotel's order(s); click outside / Esc closes.
+(function () {
+    var HOTELS = {{ hotel_orders | tojson }};
+    var back = document.getElementById('hotelModalBack');
+    function esc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : String(s)); return d.innerHTML; }
+    function close() { back.classList.remove('open'); }
+    function open(phone) {
+        var h = HOTELS[phone];
+        if (!h) return;
+        document.getElementById('hotelModalTitle').firstChild.textContent = h.name;
+        document.getElementById('hotelModalSub').textContent =
+            h.orders.length + (h.orders.length === 1 ? ' order' : ' orders') + ' · {{ target_date_display }}';
+        document.getElementById('hotelModalBody').innerHTML = h.orders.map(function (o) {
+            var rows = o.items.map(function (i) {
+                return '<tr><td>' + esc(i.product) + '</td><td>' + esc(i.qty) + ' ' + esc(i.unit) + '</td></tr>';
+            }).join('');
+            var meta = esc(o.delivery || 'No date') + (o.time ? ' · ' + esc(o.time) : '');
+            var tags = (o.billed ? '<span style="color:#1a6b41">✓ billed</span>' : '<span style="color:#c05621">pending</span>')
+                     + (o.review ? ' <span style="color:#e53e3e">⛔ check</span>' : '');
+            return '<div class="hotel-order"><div class="hotel-order-meta"><span>' + meta + '</span><span>' + tags + '</span></div>'
+                 + '<table>' + rows + '</table></div>';
+        }).join('');
+        back.classList.add('open');
+    }
+    document.addEventListener('click', function (e) {
+        var link = e.target.closest('.hotel-link');
+        if (link) { e.preventDefault(); open(link.getAttribute('data-hotel')); }
+    });
+    document.getElementById('hotelModalX').addEventListener('click', close);
+    back.addEventListener('click', close);          // click anywhere (backdrop or card) closes
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+})();
 
 async function cancelOrder(orderId, customerName) {
     const reason = prompt(
