@@ -143,7 +143,8 @@ def dashboard(
                 continue
             name = order.customer_name or order.customer_phone
             if name not in totals:
-                totals[name] = {"customer_name": name, "total_quantity": 0.0, "orders_count": 0}
+                totals[name] = {"customer_name": name, "customer_phone": order.customer_phone,
+                                "total_quantity": 0.0, "orders_count": 0}
             totals[name]["orders_count"] += 1
             for item in order.items_parsed:
                 if isinstance(item, dict):

@@ -38,6 +38,9 @@
         .card details[open] summary.number { margin-bottom:6px; }
         .hotel-breakdown-table { width:100%; font-size:11px; text-align:left; }
         .hotel-breakdown-table td { padding:2px 0; }
+        .hotel-link { color:inherit; text-decoration:none; border-bottom:1px dotted #999; cursor:pointer; }
+        .hotel-link:hover { color:#075e54; border-bottom-color:#075e54; }
+        .order-card.hotel-flash { outline:3px solid #f6ad55; box-shadow:0 0 0 6px rgba(246,173,85,.35); transition:outline .3s; }
         .hotel-breakdown-table td:last-child { text-align:right; white-space:nowrap; padding-left:8px; }
 
         /* ── Section ── */
@@ -372,7 +375,7 @@
                 {% if grand_hotel_totals %}
                 <table class="hotel-breakdown-table">
                     {% for h in grand_hotel_totals %}
-                    <tr><td>{{ h.customer_name }}</td><td><strong>{{ h.orders_count }}</strong> order{{ 's' if h.orders_count != 1 else '' }}</td></tr>
+                    <tr><td><a href="#" class="hotel-link" data-hotel="{{ h.customer_phone }}" title="Show this hotel's order">{{ h.customer_name }}</a></td><td><strong>{{ h.orders_count }}</strong> order{{ 's' if h.orders_count != 1 else '' }}</td></tr>
                     {% endfor %}
                 </table>
                 {% endif %}
@@ -385,7 +388,7 @@
                 {% if grand_hotel_totals %}
                 <table class="hotel-breakdown-table">
                     {% for h in grand_hotel_totals %}
-                    <tr><td>{{ h.customer_name }}</td><td><strong>{{ h.total_quantity }}</strong></td></tr>
+                    <tr><td><a href="#" class="hotel-link" data-hotel="{{ h.customer_phone }}" title="Show this hotel's order">{{ h.customer_name }}</a></td><td><strong>{{ h.total_quantity }}</strong></td></tr>
                     {% endfor %}
                 </table>
                 {% endif %}
@@ -398,7 +401,7 @@
                 {% if grand_hotel_pending %}
                 <table class="hotel-breakdown-table">
                     {% for h in grand_hotel_pending %}
-                    <tr><td>{{ h.customer_name }}</td><td><strong>{{ h.total_quantity }}</strong></td></tr>
+                    <tr><td><a href="#" class="hotel-link" data-hotel="{{ h.customer_phone }}" title="Show this hotel's order">{{ h.customer_name }}</a></td><td><strong>{{ h.total_quantity }}</strong></td></tr>
                     {% endfor %}
                 </table>
                 {% endif %}
@@ -422,7 +425,7 @@
                 {% if group.hotel_totals %}
                 <table class="hotel-breakdown-table">
                     {% for h in group.hotel_totals %}
-                    <tr><td>{{ h.customer_name }}</td><td><strong>{{ h.total_quantity }}</strong></td></tr>
+                    <tr><td><a href="#" class="hotel-link" data-hotel="{{ h.customer_phone }}" title="Show this hotel's order">{{ h.customer_name }}</a></td><td><strong>{{ h.total_quantity }}</strong></td></tr>
                     {% endfor %}
                 </table>
                 {% endif %}
@@ -440,7 +443,7 @@
                 <div style="font-size:11px;color:#718096;margin-top:6px;font-weight:700;">By hotel:</div>
                 <table class="hotel-breakdown-table" style="margin-top:2px;">
                     {% for h in group.hotel_pending %}
-                    <tr><td>{{ h.customer_name }}</td><td><strong>{{ h.total_quantity }}</strong></td></tr>
+                    <tr><td><a href="#" class="hotel-link" data-hotel="{{ h.customer_phone }}" title="Show this hotel's order">{{ h.customer_name }}</a></td><td><strong>{{ h.total_quantity }}</strong></td></tr>
                     {% endfor %}
                 </table>
                 {% endif %}
@@ -491,7 +494,7 @@
             {% for group in area_groups %}
             <div class="area-header">📍 {{ group.area }} <span class="area-count">{{ group.orders|length }}</span> <span class="area-count" title="Total quantity (all products)">Σ {{ group.total_quantity }}</span></div>
             {% for order in group.orders %}
-            <div class="order-card{% if order.has_unclear_items %} needs-review{% endif %}">
+            <div class="order-card{% if order.has_unclear_items %} needs-review{% endif %}" data-hotel="{{ order.customer_phone }}">
                 {% if order.has_unclear_items %}
                 <div class="review-banner">⛔ CHECK ORDER — a product was dropped or a quantity couldn't be read. Verify against the original message below.</div>
                 {% endif %}
@@ -2476,6 +2479,21 @@ async function revertToToday(orderId) {
         showToast('❌ ' + (JSON.parse(e.message)?.detail || 'Failed'), 'error');
     }
 }
+
+// Hotel name in a stat-card breakdown → scroll to that hotel's order card(s) and flash them.
+document.addEventListener('click', function (e) {
+    var link = e.target.closest('.hotel-link');
+    if (!link) return;
+    e.preventDefault();
+    var phone = link.getAttribute('data-hotel');
+    var cards = Array.prototype.filter.call(
+        document.querySelectorAll('.order-card[data-hotel]'),
+        function (c) { return c.getAttribute('data-hotel') === phone; });
+    if (!cards.length) return;
+    cards[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    cards.forEach(function (c) { c.classList.add('hotel-flash'); });
+    setTimeout(function () { cards.forEach(function (c) { c.classList.remove('hotel-flash'); }); }, 2500);
+});
 
 async function cancelOrder(orderId, customerName) {
     const reason = prompt(
