@@ -338,15 +338,8 @@ async function renderEmployees() {
           <div><label>Phone</label><input name="phone" /></div>
         </div>
         <div class="row">
-          <div><label>Employee code</label><input name="code" /></div>
-          <div><label>Department</label><input name="department" /></div>
-        </div>
-        <div class="row">
           <div><label>Joining date</label><input type="date" name="join_date" /></div>
           <div><label>Monthly salary</label><input type="number" step="0.01" name="monthly_salary" /></div>
-        </div>
-        <div class="row">
-          <div><label>Annual leave quota</label><input type="number" step="0.5" name="annual_leave_quota" /></div>
         </div>
         <div class="form-actions">
           <button type="submit" id="emp-form-submit">Add employee</button>
@@ -402,11 +395,8 @@ async function renderEmployees() {
     idField.value = e.id;
     form.elements['name'].value = e.name || '';
     form.elements['phone'].value = e.phone || '';
-    form.elements['code'].value = e.code || '';
-    form.elements['department'].value = e.department || '';
     form.elements['join_date'].value = e.join_date || '';
     form.elements['monthly_salary'].value = e.monthly_salary ?? '';
-    form.elements['annual_leave_quota'].value = e.annual_leave_quota ?? '';
     submitBtn.textContent = 'Save changes';
     cancelBtn.style.display = '';
     eyebrow.textContent = 'Edit';
@@ -419,6 +409,7 @@ async function renderEmployees() {
     const payload = Object.fromEntries(new FormData(form).entries());
     const empId = payload.id;
     delete payload.id;
+    for (const k of Object.keys(payload)) if (payload[k] === '') delete payload[k];
     try {
       if (empId) {
         await api('/employees/' + empId, { method: 'PUT', body: JSON.stringify(payload) });

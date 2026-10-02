@@ -29,9 +29,8 @@ templates = make_templates()
 
 def _emp(e: Employee) -> dict:
     return {
-        "id": e.id, "name": e.name, "code": e.code, "department": e.department,
-        "phone": e.phone, "join_date": e.join_date, "monthly_salary": e.monthly_salary,
-        "annual_leave_quota": e.annual_leave_quota, "active": e.active,
+        "id": e.id, "name": e.name, "phone": e.phone, "join_date": e.join_date,
+        "monthly_salary": e.monthly_salary, "active": e.active,
     }
 
 
@@ -64,12 +63,9 @@ def _lm(l: LateMark, employee_name: Optional[str] = None) -> dict:
 
 class EmployeeIn(BaseModel):
     name: Optional[str] = None
-    code: Optional[str] = None
-    department: Optional[str] = None
     phone: Optional[str] = None
     join_date: Optional[str] = None
     monthly_salary: Optional[float] = 0
-    annual_leave_quota: Optional[float] = 12
 
 
 class AdvanceIn(BaseModel):
@@ -124,10 +120,8 @@ def create_employee(body: EmployeeIn, db: Session = Depends(get_db), username: s
     if not body.name:
         raise HTTPException(status_code=400, detail="Name is required")
     e = Employee(
-        name=body.name, code=body.code or None, department=body.department or None,
-        phone=body.phone or None, join_date=body.join_date or None,
+        name=body.name, phone=body.phone or None, join_date=body.join_date or None,
         monthly_salary=body.monthly_salary or 0,
-        annual_leave_quota=body.annual_leave_quota if body.annual_leave_quota is not None else 12,
     )
     db.add(e)
     db.commit()
@@ -141,12 +135,9 @@ def update_employee(emp_id: int, body: EmployeeIn, db: Session = Depends(get_db)
     if not e:
         raise HTTPException(status_code=404, detail="Employee not found")
     e.name = body.name
-    e.code = body.code or None
-    e.department = body.department or None
     e.phone = body.phone or None
     e.join_date = body.join_date or None
     e.monthly_salary = body.monthly_salary or 0
-    e.annual_leave_quota = body.annual_leave_quota if body.annual_leave_quota is not None else 12
     db.commit()
     db.refresh(e)
     return _emp(e)
