@@ -203,6 +203,14 @@ def rate_flags(db: Session, start: date, end: date) -> list:
     return flags[:MAX_FLAGS]
 
 
+KIND_BIG = "Dressed - without skin (Big)"
+KIND_REG = "Dressed - without skin"
+
+# Sold units per Tandoor form. Regular without-skin is sold per piece, so Vasy's
+# qty IS the bird count; Big and with-skin are sold by weight (kg).
+_SOLD_UNIT = {KIND_REG: "pcs", KIND_BIG: "kg", "Dressed - with skin": "kg"}
+
+
 def _tandoor_kind(name: str):
     """Classify a product name into a Tandoor form, or None if not Tandoor."""
     n = (name or "").lower()
@@ -210,8 +218,10 @@ def _tandoor_kind(name: str):
         return None
     if "live" in n:
         return "Live bird"
+    if "big" in n.split() and "with skin" not in n.replace("without skin", ""):
+        return KIND_BIG
     if "without skin" in n or "w/o skin" in n:
-        return "Dressed - without skin"
+        return KIND_REG
     if "with skin" in n:
         return "Dressed - with skin"
     return "Other"
@@ -254,14 +264,17 @@ def tandoor_summary(db: Session, start: date, end: date) -> dict:
         tot_nos = 0
         for k in sorted(d):
             v = d[k]
-            n = nos.get((side, k), 0)
+            unit = _SOLD_UNIT.get(k, "") if side == "sale" else ""
+            auto = side == "sale" and k == KIND_REG       # per piece: qty == nos
+            n = int(round(v[0])) if auto else nos.get((side, k), 0)
             tot_nos += n
-            out.append({"kind": k, "side": side, "qty": fmt_qty(round(v[0], 1)),
+            out.append({"kind": k, "side": side, "unit": unit, "auto_nos": auto,
+                        "qty": fmt_qty(round(v[0], 1)),
                         "amt_fmt": fmt_inr(v[1]),
                         "rate": round(v[1] / v[0], 2) if v[0] else 0.0,
                         "bills": len(v[2]) if with_bills else None,
                         "nos": n or None,
-                        "avg_wt": round(v[0] / n, 2) if n and v[0] else None})
+                        "avg_wt": (round(v[0] / n, 2) if n and v[0] and unit != "pcs" and not auto else None)})
         return out, sum(v[0] for v in d.values()), sum(v[1] for v in d.values()), tot_nos
 
     b_rows, b_q, b_a, b_n = pack(bought, "purchase", True)

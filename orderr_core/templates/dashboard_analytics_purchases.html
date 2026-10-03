@@ -150,23 +150,23 @@ td .sub{display:block;font-size:11px;font-weight:400;color:var(--ink3)}
       <tr><th>Tandoor</th><th>Qty (Vasy)</th><th>Nos</th><th>Avg wt</th><th>Amount</th><th>Avg rate</th><th>Bills</th></tr>
       <tr><td colspan="7" style="background:var(--bg);font-size:11px;font-weight:700;color:var(--ink2);text-transform:uppercase">Purchased</td></tr>
       {% for r in p.tandoor.bought %}
-      <tr><td class="name">{{ r.kind }}</td><td>{{ r.qty }}</td>
-        <td><button type="button" class="nosbtn" data-side="{{ r.side }}" data-kind="{{ r.kind }}" title="Add / edit nos by day">{% if r.nos %}<b>{{ r.nos }}</b>{% else %}<span class="add">+ add</span>{% endif %} &#9998;</button></td>
+      <tr><td class="name">{{ r.kind }}{% if r.unit == "pcs" %}<span class="sub">sold per piece</span>{% elif r.side == "sale" and r.unit == "kg" %}<span class="sub">sold by kg</span>{% endif %}</td><td>{{ r.qty }}{% if r.unit %} <span class="sub" style="display:inline">{{ r.unit }}</span>{% endif %}</td>
+        <td>{% if r.auto_nos %}<b>{{ r.nos }}</b><span class="sub">= qty</span>{% else %}<button type="button" class="nosbtn" data-side="{{ r.side }}" data-kind="{{ r.kind }}" title="Add / edit nos by day">{% if r.nos %}<b>{{ r.nos }}</b>{% else %}<span class="add">+ add</span>{% endif %} &#9998;</button>{% endif %}</td>
         <td>{% if r.avg_wt %}{{ r.avg_wt }}<span class="sub">per bird</span>{% else %}<span style="color:var(--ink3)">&mdash;</span>{% endif %}</td>
-        <td>{{ r.amt_fmt }}</td><td><b>&#8377;{{ r.rate }}</b></td><td>{{ r.bills }}</td></tr>
+        <td>{{ r.amt_fmt }}</td><td><b>&#8377;{{ r.rate }}</b>{% if r.unit %}<span class="sub">per {{ "piece" if r.unit == "pcs" else r.unit }}</span>{% endif %}</td><td>{{ r.bills }}</td></tr>
       {% else %}<tr><td colspan="7" style="color:var(--ink3);text-align:center">No Tandoor purchases in this window</td></tr>{% endfor %}
       {% if p.tandoor.bought|length > 1 %}
-      <tr><td class="name"><b>Total purchased</b></td><td><b>{{ p.tandoor.bought_qty }}</b></td><td><b>{{ p.tandoor.bought_nos or '' }}</b></td><td></td><td><b>{{ p.tandoor.bought_amt_fmt }}</b></td><td><b>&#8377;{{ p.tandoor.bought_rate }}</b></td><td></td></tr>
+      <tr><td class="name"><b>Total purchased</b></td><td></td><td></td><td></td><td><b>{{ p.tandoor.bought_amt_fmt }}</b></td><td></td><td></td></tr>
       {% endif %}
       <tr><td colspan="7" style="background:var(--bg);font-size:11px;font-weight:700;color:var(--ink2);text-transform:uppercase">Sold</td></tr>
       {% for r in p.tandoor.sold %}
-      <tr><td class="name">{{ r.kind }}</td><td>{{ r.qty }}</td>
-        <td><button type="button" class="nosbtn" data-side="{{ r.side }}" data-kind="{{ r.kind }}" title="Add / edit nos by day">{% if r.nos %}<b>{{ r.nos }}</b>{% else %}<span class="add">+ add</span>{% endif %} &#9998;</button></td>
+      <tr><td class="name">{{ r.kind }}{% if r.unit == "pcs" %}<span class="sub">sold per piece</span>{% elif r.side == "sale" and r.unit == "kg" %}<span class="sub">sold by kg</span>{% endif %}</td><td>{{ r.qty }}{% if r.unit %} <span class="sub" style="display:inline">{{ r.unit }}</span>{% endif %}</td>
+        <td>{% if r.auto_nos %}<b>{{ r.nos }}</b><span class="sub">= qty</span>{% else %}<button type="button" class="nosbtn" data-side="{{ r.side }}" data-kind="{{ r.kind }}" title="Add / edit nos by day">{% if r.nos %}<b>{{ r.nos }}</b>{% else %}<span class="add">+ add</span>{% endif %} &#9998;</button>{% endif %}</td>
         <td>{% if r.avg_wt %}{{ r.avg_wt }}<span class="sub">per bird</span>{% else %}<span style="color:var(--ink3)">&mdash;</span>{% endif %}</td>
-        <td>{{ r.amt_fmt }}</td><td><b>&#8377;{{ r.rate }}</b></td><td></td></tr>
+        <td>{{ r.amt_fmt }}</td><td><b>&#8377;{{ r.rate }}</b>{% if r.unit %}<span class="sub">per {{ "piece" if r.unit == "pcs" else r.unit }}</span>{% endif %}</td><td></td></tr>
       {% else %}<tr><td colspan="7" style="color:var(--ink3);text-align:center">No Tandoor sales in this window</td></tr>{% endfor %}
       {% if p.tandoor.sold|length > 1 %}
-      <tr><td class="name"><b>Total sold</b></td><td><b>{{ p.tandoor.sold_qty }}</b></td><td><b>{{ p.tandoor.sold_nos or '' }}</b></td><td></td><td><b>{{ p.tandoor.sold_amt_fmt }}</b></td><td><b>&#8377;{{ p.tandoor.sold_rate }}</b></td><td></td></tr>
+      <tr><td class="name"><b>Total sold</b></td><td></td><td></td><td></td><td><b>{{ p.tandoor.sold_amt_fmt }}</b></td><td></td><td></td></tr>
       {% endif %}
     </table>
   </div>
@@ -181,7 +181,7 @@ td .sub{display:block;font-size:11px;font-weight:400;color:var(--ink3)}
   <div class="note" style="margin:10px 0 0;border:none;border-left:3px solid #f5a623">
     Profit = Tandoor sold &minus; Tandoor purchased in this window (profit % of sold). It is a cash view: it ignores stock carried over, live-bird shrinkage and processing cost.
     Purchases from Vasy bills; sales from the Vasy item register (net of returns, excluding GST, internal &#8377;0 lines left out).
-    Quantities are shown as booked in Vasy &mdash; purchased and sold units are not converted, so don't read purchased vs sold as a yield.
+    Regular without-skin is sold per piece (Vasy qty = birds); Big is a separate product sold by kg. Units differ, so totals show amount only. Sales before Big was introduced are still booked under the regular product.
   </div>
   </div>
   <div class="nosmodal" id="nosModal" hidden>

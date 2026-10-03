@@ -118,6 +118,19 @@ PRODUCT_DEFINITIONS = [
         # W/O Skin vs WS Tandoor once, and the learned alias auto-maps after.
     ]),
 
+    # Big Tandoor birds are sold BY WEIGHT (kg); the regular Tandoor above is sold
+    # per piece (nos). Kept as its own SKU so each product has exactly one unit.
+    # Routed by _is_big_tandoor() BEFORE alias matching, because the regular
+    # Tandoor aliases are prefixes of these ("without skin tandoor big" starts
+    # with "without skin tandoor").
+    ("W/O Skin Tandoor Big Chicken", "kg", [
+        "without skin tandoor big", "without skin whole chicken tandoor big",
+        "wo skin tandoor big", "w/o skin tandoor big",
+        "tandoor big", "big tandoor", "tandoori big", "tandur big",
+        "tandoor big without skin", "big tandoor without skin",
+        "tandoor big skinless", "skinless tandoor big", "big tandoor skinless",
+    ]),
+
     ("W/O Skin Regular Chicken", "kg", [
         "without skin regular", "without skin whole chicken regular",
         "wo skin regular", "w/o skin regular",
@@ -344,6 +357,7 @@ ERP_ITEMS = {
     "WS Tandoor Chicken":       {"erp_code": "900005", "erp_name": "With Skin whole chicken Tandoor",    "category": "Chicken"},
     "W/O Skin Regular Chicken": {"erp_code": "900004", "erp_name": "Without Skin whole chicken Regular", "category": "Chicken"},
     "W/O Skin Tandoor Chicken": {"erp_code": "900003", "erp_name": "Without Skin whole chicken Tandoor", "category": "Chicken"},
+    "W/O Skin Tandoor Big Chicken": {"erp_code": "900027", "erp_name": "Without Skin whole chicken Tandoor Big", "category": "Chicken"},
     "Curry Cut":                {"erp_code": "900007", "erp_name": "Chicken Curry Cut Without Skin",     "category": "Chicken"},
     "Biryani Cut":              {"erp_code": "900020", "erp_name": "Chicken Biryani Cut",                "category": "Chicken"},
     "Breast Boneless":          {"erp_code": "900018", "erp_name": "Chicken Breast boneless",            "category": "Chicken"},
@@ -562,6 +576,20 @@ def _is_skin_ambiguous(raw_tokens: set) -> bool:
     return bool(raw_tokens) and frozenset(raw_tokens) in _AMBIGUOUS_TOKEN_SETS
 
 
+_TANDOOR_WORDS = {"tandoor", "tandur", "tandoori", "tanduri"}
+
+
+def _is_big_tandoor(raw_tokens: set) -> bool:
+    """True when the text names a BIG Tandoor bird (sold by kg). Needs both a
+    Tandoor word and 'big'; a with-skin mention is not routed here (no big
+    with-skin product exists)."""
+    if "big" not in raw_tokens or not (raw_tokens & _TANDOOR_WORDS):
+        return False
+    if "ws" in raw_tokens or ("with" in raw_tokens and "without" not in raw_tokens):
+        return False
+    return True
+
+
 def _match_product(raw_name: str):
     """
     Returns (display_name, unit) or None.
@@ -584,6 +612,11 @@ def _match_product(raw_name: str):
     #    upstream of _match_product, so a resolved term still auto-maps.
     if _is_skin_ambiguous(raw_tokens):
         return None
+
+    # 0b. Big Tandoor (by kg) — before prefix matching so the regular Tandoor
+    #     aliases can't swallow it.
+    if _is_big_tandoor(raw_tokens):
+        return "W/O Skin Tandoor Big Chicken", "kg"
 
     # 1. Exact
     for display, unit, aliases in PRODUCT_DEFINITIONS:

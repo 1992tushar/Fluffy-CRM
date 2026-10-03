@@ -71,6 +71,7 @@ GLOBAL_FALLBACK_BANDS: dict[str, tuple[float, float]] = {
     "Drumstick":             (1.0,  50.0),
     "Whole Leg":             (1.0,  50.0),
     "WS Tandoor Chicken":    (1.0,  50.0),
+    "W/O Skin Tandoor Big Chicken": (1.0, 50.0),
     "Carcass":               (1.0,  50.0),
 
     # ── Offal / byproducts / small-portion (0.25–8 kg) ────────────────────
