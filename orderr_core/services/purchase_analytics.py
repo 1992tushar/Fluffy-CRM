@@ -141,7 +141,7 @@ def purchase_overview(db: Session, start: date, end: date) -> dict:
             "share": round(a["amt"] / tc["amt"] * 100, 1) if tc["amt"] else 0.0,
             "rate": round(a["amt"] / a["qty"], 2) if a["qty"] else 0.0,
             "bills": len(a["bills"]),
-            "items": len(a["other"]),
+            "n_items": len(a["other"]),
             "chg": _pct(a["amt"], p["amt"]) if p and p["amt"] else None,
         })
     suppliers.sort(key=lambda x: x["amt"], reverse=True)

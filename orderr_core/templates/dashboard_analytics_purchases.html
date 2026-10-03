@@ -163,7 +163,7 @@ td .sub{display:block;font-size:11px;font-weight:400;color:var(--ink3)}
         <td>{{ s.qty }}</td>
         <td>{{ s.amt_fmt }}<div class="bar"><i style="width:{{ s.share }}%"></i></div><span class="sub">{{ s.share }}%</span></td>
         <td>₹{{ s.rate }}</td>
-        <td>{{ s.items }}</td>
+        <td>{{ s.n_items }}</td>
         <td>{{ s.bills }}</td>
         <td>{% if s.chg is none %}<span style="color:var(--ink3)">new</span>{% else %}{{ '▲' if s.chg > 0 else ('▼' if s.chg < 0 else '–') }} {{ s.chg|abs }}%{% endif %}</td>
       </tr>
