@@ -146,14 +146,6 @@ def purchase_overview(db: Session, start: date, end: date) -> dict:
         })
     suppliers.sort(key=lambda x: x["amt"], reverse=True)
 
-    # ── daily spend ──────────────────────────────────────────────────────────
-    by_day = {}
-    for l in cur:
-        by_day[l["date"]] = by_day.get(l["date"], 0.0) + l["amt"]
-    series = [{"date": (start + timedelta(days=i)).strftime("%d %b"),
-               "amt": round(by_day.get(start + timedelta(days=i), 0.0), 2)}
-              for i in range(span)]
-
     return {
         "has_data": bool(cur),
         "from": start.isoformat(), "to": end.isoformat(), "days": span,
@@ -167,7 +159,6 @@ def purchase_overview(db: Session, start: date, end: date) -> dict:
         },
         "by_item": items,
         "by_supplier": suppliers,
-        "series": series,
         "flags": rate_flags(db, start, end),
     }
 

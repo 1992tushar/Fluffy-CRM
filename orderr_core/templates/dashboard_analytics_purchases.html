@@ -54,6 +54,13 @@ td .sub{display:block;font-size:11px;font-weight:400;color:var(--ink3)}
 .trend .b:hover{background:var(--red)}
 .tl{display:flex;gap:3px;margin-top:4px}
 .tl span{flex:1;font-size:8px;color:var(--ink3);text-align:center;overflow:hidden;white-space:nowrap}
+.hb{display:grid;grid-template-columns:minmax(120px,240px) 1fr 150px;gap:12px;align-items:center;padding:6px 0}
+@media(max-width:640px){.hb{grid-template-columns:1fr;gap:4px}}
+.hb-name{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hb-track{height:14px;background:var(--bg);border-radius:4px}
+.hb-track i{display:block;height:100%;background:var(--amber);border-radius:4px;min-width:2px}
+.hb-val{text-align:right;font-size:13px}
+.hb-val span{display:block;font-size:11px;color:var(--ink3)}
 .empty{color:var(--ink3);text-align:center;padding:26px}
 .flag{color:var(--red);font-weight:700}
 </style>
@@ -112,18 +119,16 @@ td .sub{display:block;font-size:11px;font-weight:400;color:var(--ink3)}
     <div class="kpi"><div class="n">{{ p.kpi.bills }}</div><div class="l">Bills · {{ p.kpi.suppliers }} supplier{{ '' if p.kpi.suppliers == 1 else 's' }}</div></div>
   </div>
 
-  <div class="section-title">Daily spend</div>
-  <div class="card" style="padding-bottom:14px">
-    {% set maxa = p.series|map(attribute='amt')|max %}
-    <div class="trend">
-      {% for d in p.series %}
-      <div class="b" style="height:{{ (d.amt / maxa * 100) if maxa else 0 }}%" title="{{ d.date }}: ₹{{ '{:,.0f}'.format(d.amt) }}"></div>
-      {% endfor %}
+  <div class="section-title">Items purchased</div>
+  <div class="card" style="padding:14px 16px">
+    {% set maxs = p.by_item|map(attribute='amt')|max %}
+    {% for i in p.by_item %}
+    <div class="hb">
+      <div class="hb-name" title="{{ i.item }}">{{ i.item }}</div>
+      <div class="hb-track"><i style="width:{{ (i.amt / maxs * 100) if maxs else 0 }}%"></i></div>
+      <div class="hb-val"><b>{{ i.amt_fmt }}</b><span>{{ i.qty }} @ &#8377;{{ i.rate }}</span></div>
     </div>
-    <div class="tl">
-      {% set step = (p.series|length // 12) + 1 %}
-      {% for d in p.series %}<span>{{ d.date[:6] if loop.index0 % step == 0 else '' }}</span>{% endfor %}
-    </div>
+    {% endfor %}
   </div>
 
   <div class="section-title">By item</div>
@@ -179,12 +184,12 @@ td .sub{display:block;font-size:11px;font-weight:400;color:var(--ink3)}
   <div class="card">
     {% if p.flags %}
     <table>
-      <tr><th>Date</th><th>Bill</th><th>Supplier</th><th>Item</th><th>Qty</th><th>Rate</th><th>Normal</th><th>Over</th><th>Extra paid</th></tr>
+      <tr><th>Date</th><th>Bill</th><th>Supplier</th><th>Item</th><th>Qty</th><th>Rate</th><th>Over</th><th>Extra paid</th></tr>
       {% for f in p.flags %}
       <tr>
         <td>{{ f.date }}</td><td>{{ f.bill }}</td>
         <td class="name">{{ f.supplier }}</td><td class="name">{{ f.item }}</td>
-        <td>{{ f.qty }}</td><td><b>{{ f.rate }}</b></td><td>{{ f.ref }}</td>
+        <td>{{ f.qty }}</td><td><b>{{ f.rate }}</b></td>
         <td class="flag">+{{ f.over }}%</td><td class="flag">{{ f.extra_fmt }}</td>
       </tr>
       {% endfor %}
