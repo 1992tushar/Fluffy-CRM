@@ -23,6 +23,7 @@ from orderr_core.routes.billing import router as billing_router
 # Staff Ledger module router (absolute paths: /staff, /staff/api/*)
 from orderr_core.routes.staff import router as staff_router
 from orderr_core.routes.wastage import router as wastage_router
+from orderr_core.routes.purchases import router as purchases_router
 from orderr_core.routes.reminders import router as reminders_router
 from orderr_core.routes.broadcast import router as broadcast_router
 from orderr_core.routes.status_report import router as status_report_router
@@ -689,6 +690,7 @@ app.include_router(billing_router,  tags=["Billing"])
 # ── Staff Ledger module (merged) — router carries its own absolute paths ───────
 app.include_router(staff_router,    tags=["Staff"])
 app.include_router(wastage_router,  prefix="/dashboard", tags=["Analytics"])
+app.include_router(purchases_router, prefix="/dashboard", tags=["Analytics"])
 app.include_router(reminders_router, prefix="/dashboard", tags=["Reminders"])
 app.include_router(broadcast_router, prefix="/dashboard", tags=["Broadcast"])
 app.include_router(status_report_router, tags=["Reports"])   # public /r/<key>, no auth

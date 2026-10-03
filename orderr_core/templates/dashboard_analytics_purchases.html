@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ plant_name }} · Purchases</title>
+<style>
+:root{
+  --ink:#1a1a18;--ink2:#5a5a54;--ink3:#9a9a90;
+  --bg:#f4f3ef;--surface:#fff;--border:rgba(0,0,0,0.09);--border-strong:rgba(0,0,0,0.15);
+  --green:#1a6b41;--green-bg:#e8f5ee;--green-border:#b6ddc8;
+  --amber:#92540a;--amber-bg:#fef3c7;--amber-border:#f5cc6e;
+  --red:#b91c1c;--red-bg:#fee2e2;--red-border:#fca5a5;
+  --blue:#1b4fba;--blue-bg:#eff4ff;--blue-border:#b3c8f7;
+  --r:10px;--shadow:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.05);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;background:var(--bg);color:var(--ink);min-height:100vh}
+.nav{display:flex;align-items:center;background:var(--surface);border-bottom:1px solid var(--border);padding:0 20px;height:52px;position:sticky;top:0;z-index:100;box-shadow:var(--shadow)}
+.nav-back{display:flex;align-items:center;gap:4px;font-size:13px;font-weight:500;color:var(--ink3);text-decoration:none;margin-right:14px;padding:4px 8px;border-radius:6px}
+.nav-back:hover{color:var(--green);background:var(--bg)}
+.nav-logo{font-weight:700;font-size:15px;color:var(--green);display:flex;align-items:center;gap:6px}
+.nav-right{margin-left:auto}
+.date-chip{font-size:12px;color:var(--ink3);background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:4px 12px}
+main{max-width:1100px;margin:0 auto;padding:24px 18px 80px}
+.section-title{font-size:15px;font-weight:700;margin:24px 2px 10px}
+.note{font-size:12px;color:var(--ink3);background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--amber-border);border-radius:8px;padding:10px 14px;margin-bottom:14px}
+.range{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+.range input[type=date]{font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--border-strong);border-radius:7px;background:var(--surface)}
+.range button,.range a.chip{font:inherit;font-size:12px;font-weight:600;padding:6px 12px;border-radius:7px;border:1px solid var(--border-strong);background:var(--surface);color:var(--ink2);cursor:pointer;text-decoration:none}
+.range button.go{background:var(--green);border-color:var(--green);color:#fff}
+.range a.chip:hover{background:var(--bg)}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+@media(max-width:820px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;box-shadow:var(--shadow);border-top:3px solid var(--amber)}
+.kpi .n{font-size:21px;font-weight:800;letter-spacing:-.3px}
+.kpi .l{font-size:10px;color:var(--ink3);margin-top:5px;text-transform:uppercase;letter-spacing:.4px}
+.chg{display:inline-block;font-size:11px;font-weight:700;margin-top:4px;padding:1px 6px;border-radius:10px;background:var(--bg);color:var(--ink2)}
+.chg.bad{background:var(--red-bg);color:var(--red)}
+.chg.good{background:var(--green-bg);color:var(--green)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:6px 16px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink3);text-align:right;padding:9px 8px;border-bottom:1px solid var(--border-strong);white-space:nowrap}
+td{padding:9px 8px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap}
+tr:last-child td{border-bottom:none}
+th:first-child,td:first-child{text-align:left}
+td.name{white-space:normal;font-weight:600;min-width:140px}
+td .sub{display:block;font-size:11px;font-weight:400;color:var(--ink3)}
+.bar{height:5px;background:var(--bg);border-radius:3px;margin-top:4px;min-width:60px}
+.bar i{display:block;height:100%;background:var(--amber);border-radius:3px}
+.up{color:var(--red);font-weight:700}.down{color:var(--green);font-weight:700}
+.trend{display:flex;align-items:flex-end;gap:3px;height:120px;margin-top:8px}
+.trend .b{flex:1;background:var(--amber);border-radius:3px 3px 0 0;min-height:1px}
+.trend .b:hover{background:var(--red)}
+.tl{display:flex;gap:3px;margin-top:4px}
+.tl span{flex:1;font-size:8px;color:var(--ink3);text-align:center;overflow:hidden;white-space:nowrap}
+.empty{color:var(--ink3);text-align:center;padding:26px}
+.flag{color:var(--red);font-weight:700}
+</style>
+</head>
+<body>
+<div class="nav">
+  <a href="/dashboard/" class="nav-back">← Dashboard</a>
+  <span class="nav-logo">📊 {{ plant_name }} Analytics</span>
+  <div class="nav-right"><span class="date-chip">{{ current_time }}</span></div>
+</div>
+<main>
+  {% include "_analytics_subnav.html" %}
+
+  <div class="section-title" style="margin-top:0">📦 Purchases</div>
+  <form class="range" method="get">
+    <input type="date" name="from" value="{{ p.from }}">
+    <span style="color:var(--ink3)">to</span>
+    <input type="date" name="to" value="{{ p.to }}">
+    <button class="go" type="submit">Apply</button>
+    <a class="chip" href="?from={{ month_start_iso }}&to={{ today_iso }}">This month</a>
+    <a class="chip" id="r7" href="#">Last 7d</a>
+    <a class="chip" id="r30" href="#">Last 30d</a>
+    <a class="chip" id="r90" href="#">Last 90d</a>
+  </form>
+  <script>
+  (function(){
+    var end = new Date('{{ today_iso }}T00:00:00');
+    function iso(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+    [[7,'r7'],[30,'r30'],[90,'r90']].forEach(function(x){
+      var s = new Date(end); s.setDate(s.getDate()-(x[0]-1));
+      document.getElementById(x[1]).href = '?from='+iso(s)+'&to='+iso(end);
+    });
+  })();
+  </script>
+
+  <div class="note">
+    From the Vasy purchase-bill mirror. <b>Rate</b> is the effective ₹ per unit (Σ amount ÷ Σ qty).
+    Changes compare with the previous {{ p.days }} days ({{ p.prev_from }} – {{ p.prev_to }}).
+  </div>
+
+  {% if not p.has_data %}
+    <div class="card"><div class="empty">No purchase bills in this window. Import purchases under Analytics → Imports.</div></div>
+  {% else %}
+
+  {% macro chg(v, higher_is_bad=False) %}
+    {% if v is not none %}
+      <span class="chg {{ ('bad' if v > 0 else 'good') if higher_is_bad and v != 0 else '' }}">{{ '▲' if v > 0 else ('▼' if v < 0 else '–') }} {{ v|abs }}%</span>
+    {% endif %}
+  {% endmacro %}
+
+  <div class="kpis">
+    <div class="kpi"><div class="n">{{ p.kpi.amt_fmt }}</div><div class="l">Spend</div>{{ chg(p.kpi.amt_chg) }}</div>
+    <div class="kpi"><div class="n">{{ p.kpi.qty }}</div><div class="l">Qty purchased</div>{{ chg(p.kpi.qty_chg) }}</div>
+    <div class="kpi"><div class="n">₹{{ p.kpi.rate }}</div><div class="l">Avg rate / unit</div>{{ chg(p.kpi.rate_chg, True) }}</div>
+    <div class="kpi"><div class="n">{{ p.kpi.per_day_fmt }}</div><div class="l">Spend / day</div></div>
+    <div class="kpi"><div class="n">{{ p.kpi.bills }}</div><div class="l">Bills · {{ p.kpi.suppliers }} supplier{{ '' if p.kpi.suppliers == 1 else 's' }}</div></div>
+  </div>
+
+  <div class="section-title">Daily spend</div>
+  <div class="card" style="padding-bottom:14px">
+    {% set maxa = p.series|map(attribute='amt')|max %}
+    <div class="trend">
+      {% for d in p.series %}
+      <div class="b" style="height:{{ (d.amt / maxa * 100) if maxa else 0 }}%" title="{{ d.date }}: ₹{{ '{:,.0f}'.format(d.amt) }}"></div>
+      {% endfor %}
+    </div>
+    <div class="tl">
+      {% set step = (p.series|length // 12) + 1 %}
+      {% for d in p.series %}<span>{{ d.date[:6] if loop.index0 % step == 0 else '' }}</span>{% endfor %}
+    </div>
+  </div>
+
+  <div class="section-title">By item</div>
+  <div class="card">
+    <table>
+      <tr><th>Item</th><th>Qty</th><th>Spend</th><th>Avg rate</th><th>Min – Max</th><th>Last</th><th>vs prev</th><th>Weekly rate</th><th>Cheapest supplier</th></tr>
+      {% for i in p.by_item %}
+      <tr>
+        <td class="name">{{ i.item }}<span class="sub">{{ i.bills }} bill{{ '' if i.bills == 1 else 's' }} · {{ i.suppliers }} supplier{{ '' if i.suppliers == 1 else 's' }}</span></td>
+        <td>{{ i.qty }}</td>
+        <td>{{ i.amt_fmt }}<div class="bar"><i style="width:{{ i.share }}%"></i></div><span class="sub">{{ i.share }}%</span></td>
+        <td><b>₹{{ i.rate }}</b></td>
+        <td>{{ i.min_rate }} – {{ i.max_rate }}</td>
+        <td>{{ i.last_rate }}</td>
+        <td>{% if i.rate_chg is none %}<span style="color:var(--ink3)">new</span>{% else %}<span class="{{ 'up' if i.rate_chg > 0 else ('down' if i.rate_chg < 0 else '') }}">{{ '▲' if i.rate_chg > 0 else ('▼' if i.rate_chg < 0 else '–') }} {{ i.rate_chg|abs }}%</span>{% endif %}</td>
+        <td>
+          {% set pts = i.spark|select('ne', none)|list %}
+          {% if pts|length > 1 %}
+            {% set lo = pts|min %}{% set hi = pts|max %}{% set rng = (hi - lo) or 1 %}
+            {% set n = i.spark|length %}
+            <svg width="80" height="24" viewBox="0 0 80 24" aria-hidden="true"><polyline fill="none" stroke="#92540a" stroke-width="1.6" points="{% for v in i.spark %}{% if v is not none %}{{ (loop.index0 / (n - 1) * 78 + 1)|round(1) }},{{ (22 - (v - lo) / rng * 20)|round(1) }} {% endif %}{% endfor %}"/></svg>
+          {% else %}<span style="color:var(--ink3)">—</span>{% endif %}
+        </td>
+        <td>{% if i.best_supplier %}{{ i.best_supplier }}<span class="sub">₹{{ i.best_rate }}</span>{% else %}<span style="color:var(--ink3)">—</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <div class="section-title">By supplier</div>
+  <div class="card">
+    <table>
+      <tr><th>Supplier</th><th>Qty</th><th>Spend</th><th>Avg rate</th><th>Items</th><th>Bills</th><th>Spend vs prev</th></tr>
+      {% for s in p.by_supplier %}
+      <tr>
+        <td class="name">{{ s.supplier }}</td>
+        <td>{{ s.qty }}</td>
+        <td>{{ s.amt_fmt }}<div class="bar"><i style="width:{{ s.share }}%"></i></div><span class="sub">{{ s.share }}%</span></td>
+        <td>₹{{ s.rate }}</td>
+        <td>{{ s.items }}</td>
+        <td>{{ s.bills }}</td>
+        <td>{% if s.chg is none %}<span style="color:var(--ink3)">new</span>{% else %}{{ '▲' if s.chg > 0 else ('▼' if s.chg < 0 else '–') }} {{ s.chg|abs }}%{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <div class="section-title">🚩 Rate watch</div>
+  <div class="note">
+    Lines priced 8%+ above that item's median rate over the 30 days before the bill (any supplier).
+    Sorted by extra ₹ paid. A flag is a prompt to check — a real price rise, a quality grade change or a typo.
+  </div>
+  <div class="card">
+    {% if p.flags %}
+    <table>
+      <tr><th>Date</th><th>Bill</th><th>Supplier</th><th>Item</th><th>Qty</th><th>Rate</th><th>Normal</th><th>Over</th><th>Extra paid</th></tr>
+      {% for f in p.flags %}
+      <tr>
+        <td>{{ f.date }}</td><td>{{ f.bill }}</td>
+        <td class="name">{{ f.supplier }}</td><td class="name">{{ f.item }}</td>
+        <td>{{ f.qty }}</td><td><b>{{ f.rate }}</b></td><td>{{ f.ref }}</td>
+        <td class="flag">+{{ f.over }}%</td><td class="flag">{{ f.extra_fmt }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <div class="empty">No unusual rates in this window. 👍</div>
+    {% endif %}
+  </div>
+
+  {% endif %}
+</main>
+</body>
+</html>

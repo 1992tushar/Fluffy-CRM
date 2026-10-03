@@ -1063,7 +1063,7 @@ def analytics_ledger_daywise(
 _PIN_TABS = {
     "overview", "business", "cashbook", "collections", "receivables", "chase",
     "close", "financials", "expenses", "revenue",
-    "products", "team", "reconcile",
+    "products", "purchases", "team", "reconcile",
     "credit", "rfm", "churn", "payment", "portfolio", "lifecycle",
     "wastage", "quality", "datahealth", "imports", "bankrecon", "missing_entries",
 }
