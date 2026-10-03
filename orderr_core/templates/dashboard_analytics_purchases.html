@@ -119,6 +119,33 @@ td .sub{display:block;font-size:11px;font-weight:400;color:var(--ink3)}
     <div class="kpi"><div class="n">{{ p.kpi.bills }}</div><div class="l">Bills · {{ p.kpi.suppliers }} supplier{{ '' if p.kpi.suppliers == 1 else 's' }}</div></div>
   </div>
 
+  {% if p.tandoor.has_data %}
+  <div class="section-title">Tandoor &mdash; bought vs sold</div>
+  <div class="card">
+    <table>
+      <tr><th>Tandoor</th><th>Qty</th><th>Amount</th><th>Avg rate</th><th>Bills</th></tr>
+      <tr><td colspan="5" style="background:var(--bg);font-size:11px;font-weight:700;color:var(--ink2);text-transform:uppercase">Purchased</td></tr>
+      {% for r in p.tandoor.bought %}
+      <tr><td class="name">{{ r.kind }}</td><td>{{ r.qty }}</td><td>{{ r.amt_fmt }}</td><td><b>&#8377;{{ r.rate }}</b></td><td>{{ r.bills }}</td></tr>
+      {% else %}<tr><td colspan="5" style="color:var(--ink3);text-align:center">No Tandoor purchases in this window</td></tr>{% endfor %}
+      {% if p.tandoor.bought|length > 1 %}
+      <tr><td class="name"><b>Total purchased</b></td><td><b>{{ p.tandoor.bought_qty }}</b></td><td><b>{{ p.tandoor.bought_amt_fmt }}</b></td><td><b>&#8377;{{ p.tandoor.bought_rate }}</b></td><td></td></tr>
+      {% endif %}
+      <tr><td colspan="5" style="background:var(--bg);font-size:11px;font-weight:700;color:var(--ink2);text-transform:uppercase">Sold</td></tr>
+      {% for r in p.tandoor.sold %}
+      <tr><td class="name">{{ r.kind }}</td><td>{{ r.qty }}</td><td>{{ r.amt_fmt }}</td><td><b>&#8377;{{ r.rate }}</b></td><td></td></tr>
+      {% else %}<tr><td colspan="5" style="color:var(--ink3);text-align:center">No Tandoor sales in this window</td></tr>{% endfor %}
+      {% if p.tandoor.sold|length > 1 %}
+      <tr><td class="name"><b>Total sold</b></td><td><b>{{ p.tandoor.sold_qty }}</b></td><td><b>{{ p.tandoor.sold_amt_fmt }}</b></td><td><b>&#8377;{{ p.tandoor.sold_rate }}</b></td><td></td></tr>
+      {% endif %}
+    </table>
+  </div>
+  <div class="note" style="margin-top:10px">
+    Purchases from Vasy bills; sales from the Vasy item register (net of returns, excluding GST, internal &#8377;0 lines left out).
+    Quantities are shown as booked in Vasy &mdash; purchased and sold units are not converted, so don't read purchased vs sold as a yield.
+  </div>
+  {% endif %}
+
   <div class="section-title">Items purchased</div>
   <div class="card" style="padding:14px 16px">
     {% set maxs = p.by_item|map(attribute='amt')|max %}

@@ -9,8 +9,10 @@ reflects what was actually paid per unit once all lines are weighed by volume.
 from datetime import date, timedelta
 from statistics import median
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from orderr_core.models.vasy_sales_item import VasySalesItem
 from orderr_core.models.vasy_purchase import VasyPurchase, VasyPurchaseItem
 from orderr_core.services.analytics_service import fmt_inr
 from orderr_core.utils import fmt_qty
@@ -160,6 +162,7 @@ def purchase_overview(db: Session, start: date, end: date) -> dict:
         "by_item": items,
         "by_supplier": suppliers,
         "flags": rate_flags(db, start, end),
+        "tandoor": tandoor_summary(db, start, end),
     }
 
 
@@ -197,3 +200,63 @@ def rate_flags(db: Session, start: date, end: date) -> list:
                 })
     flags.sort(key=lambda f: f["extra"], reverse=True)
     return flags[:MAX_FLAGS]
+
+
+def _tandoor_kind(name: str):
+    """Classify a product name into a Tandoor form, or None if not Tandoor."""
+    n = (name or "").lower()
+    if "tandoor" not in n:
+        return None
+    if "live" in n:
+        return "Live bird"
+    if "without skin" in n or "w/o skin" in n:
+        return "Dressed - without skin"
+    if "with skin" in n:
+        return "Dressed - with skin"
+    return "Other"
+
+
+def tandoor_summary(db: Session, start: date, end: date) -> dict:
+    """Tandoor in one place: what we bought (live bird / dressed, direct) and what
+    we sold (with / without skin) in the window - qty, amount, effective rate.
+    Sales are net of Sales Returns; zero-value internal lines are excluded."""
+    bought, sold = {}, {}
+    for l in _lines(db, start, end):
+        k = _tandoor_kind(l["item"])
+        if k:
+            b = bought.setdefault(k, [0.0, 0.0, set()])
+            b[0] += l["qty"]; b[1] += l["amt"]; b[2].add(l["bill"])
+
+    rows = (db.query(VasySalesItem.product_name, VasySalesItem.sale_type,
+                     func.sum(VasySalesItem.qty), func.sum(VasySalesItem.taxable_amount))
+            .filter(VasySalesItem.invoice_date != None,               # noqa: E711
+                    VasySalesItem.invoice_date >= start,
+                    VasySalesItem.invoice_date <= end,
+                    VasySalesItem.net_amount != 0)
+            .group_by(VasySalesItem.product_name, VasySalesItem.sale_type).all())
+    for name, stype, qty, amt in rows:
+        k = _tandoor_kind(name)
+        if not k:
+            continue
+        sign = -1 if stype == "Sales Return" else 1
+        a = sold.setdefault(k, [0.0, 0.0])
+        a[0] += sign * float(qty or 0); a[1] += sign * float(amt or 0)
+
+    def pack(d, with_bills):
+        out = []
+        for k in sorted(d):
+            v = d[k]
+            out.append({"kind": k, "qty": fmt_qty(round(v[0], 1)), "amt_fmt": fmt_inr(v[1]),
+                        "rate": round(v[1] / v[0], 2) if v[0] else 0.0,
+                        "bills": len(v[2]) if with_bills else None})
+        return out, sum(v[0] for v in d.values()), sum(v[1] for v in d.values())
+
+    b_rows, b_q, b_a = pack(bought, True)
+    s_rows, s_q, s_a = pack(sold, False)
+    return {
+        "has_data": bool(b_rows or s_rows),
+        "bought": b_rows, "bought_qty": fmt_qty(round(b_q, 1)),
+        "bought_amt_fmt": fmt_inr(b_a), "bought_rate": round(b_a / b_q, 2) if b_q else 0.0,
+        "sold": s_rows, "sold_qty": fmt_qty(round(s_q, 1)),
+        "sold_amt_fmt": fmt_inr(s_a), "sold_rate": round(s_a / s_q, 2) if s_q else 0.0,
+    }
