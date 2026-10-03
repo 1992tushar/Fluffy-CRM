@@ -4,8 +4,8 @@ untouched. Mounted under /dashboard in main.py → /dashboard/analytics/purchase
 """
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from orderr_core.database import get_db
@@ -60,3 +60,37 @@ def analytics_purchases(
             "analytics_view": "purchases",
         },
     )
+
+
+@router.get("/analytics/purchases/tandoor-days")
+def tandoor_days(
+    side: str,
+    kind: str,
+    frm: str = Query(alias="from"),
+    to: str = Query(),
+    db: Session = Depends(get_db),
+    username: str = Depends(require_auth),
+):
+    """Per-day Vasy qty + saved nos for one Tandoor row (feeds the Nos editor)."""
+    from orderr_core.services import purchase_analytics
+
+    start, end = _parse_iso(frm), _parse_iso(to)
+    if side not in purchase_analytics.TANDOOR_SIDES or not start or not end:
+        raise HTTPException(status_code=400, detail="Bad request.")
+    return JSONResponse({"days": purchase_analytics.tandoor_days(db, side, kind, start, end)})
+
+
+@router.post("/analytics/purchases/tandoor-nos")
+async def tandoor_nos_save(
+    request: Request,
+    db: Session = Depends(get_db),
+    username: str = Depends(require_auth),
+):
+    """Save the bird counts (nos) entered for one Tandoor row."""
+    from orderr_core.services import purchase_analytics
+
+    body = await request.json()
+    err = purchase_analytics.save_tandoor_nos(db, body)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    return JSONResponse({"status": "ok"})

@@ -61,6 +61,29 @@ td .sub{display:block;font-size:11px;font-weight:400;color:var(--ink3)}
 .hb-track i{display:block;height:100%;background:var(--amber);border-radius:4px;min-width:2px}
 .hb-val{text-align:right;font-size:13px}
 .hb-val span{display:block;font-size:11px;color:var(--ink3)}
+.tandoor{margin-top:24px;border:2px solid transparent;border-radius:14px;padding:12px 14px 14px;background:linear-gradient(var(--surface),var(--surface)) padding-box,linear-gradient(135deg,#ff7a18,#f5a623 45%,#e11d48) border-box;box-shadow:0 4px 18px rgba(245,122,24,.18)}
+.tandoor-head{font-size:15px;font-weight:800;margin:0 2px 8px;background:linear-gradient(90deg,#ea580c,#e11d48);-webkit-background-clip:text;background-clip:text;color:transparent}
+.tprofit{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+@media(max-width:640px){.tprofit{grid-template-columns:repeat(2,1fr)}}
+.tprofit div{background:var(--bg);border-radius:9px;padding:10px 12px}
+.tprofit span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink3)}
+.tprofit b{font-size:17px}
+.tprofit .pct{background:var(--green-bg)}.tprofit .pct b{color:var(--green);font-size:20px}
+.tprofit.neg .pct{background:var(--red-bg)}.tprofit.neg .pct b,.tprofit.neg div:nth-child(3) b{color:var(--red)}
+.nosbtn{font:inherit;font-size:13px;background:var(--bg);border:1px dashed var(--border-strong);border-radius:7px;padding:3px 9px;cursor:pointer;color:var(--ink)}
+.nosbtn:hover{border-color:#ea580c;background:#fff4ea}
+.nosbtn .add{color:#ea580c;font-weight:600;font-size:12px}
+.nosmodal{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:300;display:flex;align-items:center;justify-content:center;padding:16px}
+.nosmodal[hidden]{display:none}
+.nosbox{background:var(--surface);border-radius:12px;max-width:440px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.25)}
+.noshead{display:flex;justify-content:space-between;align-items:center;padding:14px 16px 4px;font-size:14px}
+.noshead button{font-size:22px;line-height:1;background:none;border:none;cursor:pointer;color:var(--ink3)}
+.nossub{font-size:12px;color:var(--ink3);padding:0 16px 8px}
+.nosbody{overflow-y:auto;padding:0 16px}
+.nosbody input{width:90px;font:inherit;padding:4px 7px;border:1px solid var(--border-strong);border-radius:6px;text-align:right}
+.nosempty{color:var(--ink3);text-align:center;padding:24px}
+.nosfoot{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-top:1px solid var(--border);font-size:12px;color:var(--red)}
+.nosfoot .go{font:inherit;font-size:13px;font-weight:600;padding:7px 18px;border-radius:7px;border:none;background:var(--green);color:#fff;cursor:pointer}
 .empty{color:var(--ink3);text-align:center;padding:26px}
 .flag{color:var(--red);font-weight:700}
 </style>
@@ -120,30 +143,92 @@ td .sub{display:block;font-size:11px;font-weight:400;color:var(--ink3)}
   </div>
 
   {% if p.tandoor.has_data %}
-  <div class="section-title">Tandoor &mdash; bought vs sold</div>
-  <div class="card">
+  <div class="tandoor">
+  <div class="tandoor-head">&#128293; Tandoor &mdash; bought vs sold</div>
+  <div class="card" style="box-shadow:none;border:none;padding:6px 10px">
     <table>
-      <tr><th>Tandoor</th><th>Qty</th><th>Amount</th><th>Avg rate</th><th>Bills</th></tr>
-      <tr><td colspan="5" style="background:var(--bg);font-size:11px;font-weight:700;color:var(--ink2);text-transform:uppercase">Purchased</td></tr>
+      <tr><th>Tandoor</th><th>Qty (Vasy)</th><th>Nos</th><th>Avg wt</th><th>Amount</th><th>Avg rate</th><th>Bills</th></tr>
+      <tr><td colspan="7" style="background:var(--bg);font-size:11px;font-weight:700;color:var(--ink2);text-transform:uppercase">Purchased</td></tr>
       {% for r in p.tandoor.bought %}
-      <tr><td class="name">{{ r.kind }}</td><td>{{ r.qty }}</td><td>{{ r.amt_fmt }}</td><td><b>&#8377;{{ r.rate }}</b></td><td>{{ r.bills }}</td></tr>
-      {% else %}<tr><td colspan="5" style="color:var(--ink3);text-align:center">No Tandoor purchases in this window</td></tr>{% endfor %}
+      <tr><td class="name">{{ r.kind }}</td><td>{{ r.qty }}</td>
+        <td><button type="button" class="nosbtn" data-side="{{ r.side }}" data-kind="{{ r.kind }}" title="Add / edit nos by day">{% if r.nos %}<b>{{ r.nos }}</b>{% else %}<span class="add">+ add</span>{% endif %} &#9998;</button></td>
+        <td>{% if r.avg_wt %}{{ r.avg_wt }}<span class="sub">per bird</span>{% else %}<span style="color:var(--ink3)">&mdash;</span>{% endif %}</td>
+        <td>{{ r.amt_fmt }}</td><td><b>&#8377;{{ r.rate }}</b></td><td>{{ r.bills }}</td></tr>
+      {% else %}<tr><td colspan="7" style="color:var(--ink3);text-align:center">No Tandoor purchases in this window</td></tr>{% endfor %}
       {% if p.tandoor.bought|length > 1 %}
-      <tr><td class="name"><b>Total purchased</b></td><td><b>{{ p.tandoor.bought_qty }}</b></td><td><b>{{ p.tandoor.bought_amt_fmt }}</b></td><td><b>&#8377;{{ p.tandoor.bought_rate }}</b></td><td></td></tr>
+      <tr><td class="name"><b>Total purchased</b></td><td><b>{{ p.tandoor.bought_qty }}</b></td><td><b>{{ p.tandoor.bought_nos or '' }}</b></td><td></td><td><b>{{ p.tandoor.bought_amt_fmt }}</b></td><td><b>&#8377;{{ p.tandoor.bought_rate }}</b></td><td></td></tr>
       {% endif %}
-      <tr><td colspan="5" style="background:var(--bg);font-size:11px;font-weight:700;color:var(--ink2);text-transform:uppercase">Sold</td></tr>
+      <tr><td colspan="7" style="background:var(--bg);font-size:11px;font-weight:700;color:var(--ink2);text-transform:uppercase">Sold</td></tr>
       {% for r in p.tandoor.sold %}
-      <tr><td class="name">{{ r.kind }}</td><td>{{ r.qty }}</td><td>{{ r.amt_fmt }}</td><td><b>&#8377;{{ r.rate }}</b></td><td></td></tr>
-      {% else %}<tr><td colspan="5" style="color:var(--ink3);text-align:center">No Tandoor sales in this window</td></tr>{% endfor %}
+      <tr><td class="name">{{ r.kind }}</td><td>{{ r.qty }}</td>
+        <td><button type="button" class="nosbtn" data-side="{{ r.side }}" data-kind="{{ r.kind }}" title="Add / edit nos by day">{% if r.nos %}<b>{{ r.nos }}</b>{% else %}<span class="add">+ add</span>{% endif %} &#9998;</button></td>
+        <td>{% if r.avg_wt %}{{ r.avg_wt }}<span class="sub">per bird</span>{% else %}<span style="color:var(--ink3)">&mdash;</span>{% endif %}</td>
+        <td>{{ r.amt_fmt }}</td><td><b>&#8377;{{ r.rate }}</b></td><td></td></tr>
+      {% else %}<tr><td colspan="7" style="color:var(--ink3);text-align:center">No Tandoor sales in this window</td></tr>{% endfor %}
       {% if p.tandoor.sold|length > 1 %}
-      <tr><td class="name"><b>Total sold</b></td><td><b>{{ p.tandoor.sold_qty }}</b></td><td><b>{{ p.tandoor.sold_amt_fmt }}</b></td><td><b>&#8377;{{ p.tandoor.sold_rate }}</b></td><td></td></tr>
+      <tr><td class="name"><b>Total sold</b></td><td><b>{{ p.tandoor.sold_qty }}</b></td><td><b>{{ p.tandoor.sold_nos or '' }}</b></td><td></td><td><b>{{ p.tandoor.sold_amt_fmt }}</b></td><td><b>&#8377;{{ p.tandoor.sold_rate }}</b></td><td></td></tr>
       {% endif %}
     </table>
   </div>
-  <div class="note" style="margin-top:10px">
+  {% if p.tandoor.profit_ok %}
+  <div class="tprofit {{ 'neg' if p.tandoor.profit_neg else '' }}">
+    <div><span>Sold</span><b>{{ p.tandoor.sold_amt_fmt }}</b></div>
+    <div><span>&minus; Purchased</span><b>{{ p.tandoor.bought_amt_fmt }}</b></div>
+    <div><span>Profit</span><b>{{ p.tandoor.profit_fmt }}</b></div>
+    <div class="pct"><span>Profit %</span><b>{{ p.tandoor.profit_pct }}%</b></div>
+  </div>
+  {% endif %}
+  <div class="note" style="margin:10px 0 0;border:none;border-left:3px solid #f5a623">
+    Profit = Tandoor sold &minus; Tandoor purchased in this window (profit % of sold). It is a cash view: it ignores stock carried over, live-bird shrinkage and processing cost.
     Purchases from Vasy bills; sales from the Vasy item register (net of returns, excluding GST, internal &#8377;0 lines left out).
     Quantities are shown as booked in Vasy &mdash; purchased and sold units are not converted, so don't read purchased vs sold as a yield.
   </div>
+  </div>
+  <div class="nosmodal" id="nosModal" hidden>
+    <div class="nosbox" role="dialog" aria-modal="true" aria-labelledby="nosTitle">
+      <div class="noshead"><b id="nosTitle"></b><button type="button" id="nosClose" aria-label="Close">&times;</button></div>
+      <div class="nossub">Qty comes from Vasy. Enter the number of birds for each day (leave blank to clear).</div>
+      <div id="nosBody" class="nosbody"></div>
+      <div class="nosfoot"><span id="nosMsg"></span><button type="button" class="go" id="nosSave">Save</button></div>
+    </div>
+  </div>
+  <script>
+  (function(){
+    var FROM='{{ p.from }}', TO='{{ p.to }}', cur=null;
+    var modal=document.getElementById('nosModal'), body=document.getElementById('nosBody'),
+        msg=document.getElementById('nosMsg'), title=document.getElementById('nosTitle');
+    function esc(t){var d=document.createElement('div');d.textContent=t;return d.innerHTML;}
+    function close(){modal.hidden=true;cur=null;}
+    document.getElementById('nosClose').onclick=close;
+    modal.addEventListener('click',function(e){if(e.target===modal)close();});
+    document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!modal.hidden)close();});
+    Array.prototype.forEach.call(document.querySelectorAll('.nosbtn'),function(btn){
+      btn.addEventListener('click',function(){
+        cur={side:btn.dataset.side,kind:btn.dataset.kind};
+        title.textContent=(cur.side==='purchase'?'Purchased':'Sold')+' · '+cur.kind+' · nos by day';
+        body.innerHTML='<div class="nosempty">Loading…</div>';msg.textContent='';modal.hidden=false;
+        fetch('/dashboard/analytics/purchases/tandoor-days?side='+encodeURIComponent(cur.side)+'&kind='+encodeURIComponent(cur.kind)+'&from='+FROM+'&to='+TO,{credentials:'same-origin'})
+          .then(function(r){if(!r.ok)throw 0;return r.json();})
+          .then(function(d){
+            if(!d.days.length){body.innerHTML='<div class="nosempty">No days with data in this range.</div>';return;}
+            body.innerHTML='<table><tr><th>Date</th><th>Qty (Vasy)</th><th>Nos</th></tr>'+d.days.map(function(x){
+              return '<tr><td>'+esc(x.label)+'</td><td>'+esc(x.qty)+'</td><td><input type="number" min="0" step="1" inputmode="numeric" data-date="'+x.date+'" value="'+(x.nos==null?'':x.nos)+'"></td></tr>';
+            }).join('')+'</table>';
+          }).catch(function(){body.innerHTML='<div class="nosempty">Could not load days.</div>';});
+      });
+    });
+    document.getElementById('nosSave').onclick=function(){
+      if(!cur)return;
+      var entries=Array.prototype.map.call(body.querySelectorAll('input[data-date]'),function(i){return {date:i.dataset.date,nos:i.value};});
+      msg.textContent='Saving…';
+      fetch('/dashboard/analytics/purchases/tandoor-nos',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({side:cur.side,kind:cur.kind,entries:entries})})
+        .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
+        .then(function(x){if(x.ok){location.reload();}else{msg.textContent=x.j.detail||'Could not save.';}})
+        .catch(function(){msg.textContent='Could not save.';});
+    };
+  })();
+  </script>
   {% endif %}
 
   <div class="section-title">Items purchased</div>

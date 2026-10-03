@@ -13,6 +13,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from orderr_core.models.vasy_sales_item import VasySalesItem
+from orderr_core.models.tandoor_nos import TandoorNos
 from orderr_core.models.vasy_purchase import VasyPurchase, VasyPurchaseItem
 from orderr_core.services.analytics_service import fmt_inr
 from orderr_core.utils import fmt_qty
@@ -242,21 +243,118 @@ def tandoor_summary(db: Session, start: date, end: date) -> dict:
         a = sold.setdefault(k, [0.0, 0.0])
         a[0] += sign * float(qty or 0); a[1] += sign * float(amt or 0)
 
-    def pack(d, with_bills):
+    nos = {}
+    for side, kind, n in (db.query(TandoorNos.side, TandoorNos.kind, func.sum(TandoorNos.nos))
+                          .filter(TandoorNos.entry_date >= start, TandoorNos.entry_date <= end)
+                          .group_by(TandoorNos.side, TandoorNos.kind).all()):
+        nos[(side, kind)] = int(n or 0)
+
+    def pack(d, side, with_bills):
         out = []
+        tot_nos = 0
         for k in sorted(d):
             v = d[k]
-            out.append({"kind": k, "qty": fmt_qty(round(v[0], 1)), "amt_fmt": fmt_inr(v[1]),
+            n = nos.get((side, k), 0)
+            tot_nos += n
+            out.append({"kind": k, "side": side, "qty": fmt_qty(round(v[0], 1)),
+                        "amt_fmt": fmt_inr(v[1]),
                         "rate": round(v[1] / v[0], 2) if v[0] else 0.0,
-                        "bills": len(v[2]) if with_bills else None})
-        return out, sum(v[0] for v in d.values()), sum(v[1] for v in d.values())
+                        "bills": len(v[2]) if with_bills else None,
+                        "nos": n or None,
+                        "avg_wt": round(v[0] / n, 2) if n and v[0] else None})
+        return out, sum(v[0] for v in d.values()), sum(v[1] for v in d.values()), tot_nos
 
-    b_rows, b_q, b_a = pack(bought, True)
-    s_rows, s_q, s_a = pack(sold, False)
+    b_rows, b_q, b_a, b_n = pack(bought, "purchase", True)
+    s_rows, s_q, s_a, s_n = pack(sold, "sale", False)
+    # Window profit = sold revenue - purchased cost (cash view; ignores stock timing,
+    # live-bird shrinkage and processing cost). Only meaningful with both sides.
+    profit = s_a - b_a
+    both = bool(b_rows and s_rows and s_a)
     return {
         "has_data": bool(b_rows or s_rows),
+        "profit_ok": both,
+        "profit_fmt": fmt_inr(profit),
+        "profit_neg": profit < 0,
+        "profit_pct": round(profit / s_a * 100, 1) if both else None,
+        "bought_nos": b_n or None, "sold_nos": s_n or None,
         "bought": b_rows, "bought_qty": fmt_qty(round(b_q, 1)),
         "bought_amt_fmt": fmt_inr(b_a), "bought_rate": round(b_a / b_q, 2) if b_q else 0.0,
         "sold": s_rows, "sold_qty": fmt_qty(round(s_q, 1)),
         "sold_amt_fmt": fmt_inr(s_a), "sold_rate": round(s_a / s_q, 2) if s_q else 0.0,
     }
+
+
+TANDOOR_SIDES = ("purchase", "sale")
+
+
+def tandoor_days(db: Session, side: str, kind: str, start: date, end: date) -> list:
+    """Per-day Vasy qty and entered nos for one Tandoor row - feeds the Nos editor.
+    Includes every day that has either a Vasy quantity or a saved count."""
+    qty = {}
+    if side == "purchase":
+        for l in _lines(db, start, end):
+            if _tandoor_kind(l["item"]) == kind:
+                qty[l["date"]] = qty.get(l["date"], 0.0) + l["qty"]
+    else:
+        q = (db.query(VasySalesItem.invoice_date, VasySalesItem.product_name,
+                      VasySalesItem.sale_type, func.sum(VasySalesItem.qty))
+             .filter(VasySalesItem.invoice_date != None,               # noqa: E711
+                     VasySalesItem.invoice_date >= start,
+                     VasySalesItem.invoice_date <= end,
+                     VasySalesItem.net_amount != 0)
+             .group_by(VasySalesItem.invoice_date, VasySalesItem.product_name,
+                       VasySalesItem.sale_type))
+        for d, name, stype, qy in q.all():
+            if _tandoor_kind(name) == kind:
+                qty[d] = qty.get(d, 0.0) + (-1 if stype == "Sales Return" else 1) * float(qy or 0)
+
+    saved = {r.entry_date: r.nos for r in
+             db.query(TandoorNos).filter(TandoorNos.side == side, TandoorNos.kind == kind,
+                                         TandoorNos.entry_date >= start,
+                                         TandoorNos.entry_date <= end).all()}
+    return [{"date": d.isoformat(), "label": d.strftime("%d %b"),
+             "qty": fmt_qty(round(qty.get(d, 0.0), 1)), "nos": saved.get(d)}
+            for d in sorted(set(qty) | set(saved))]
+
+
+def save_tandoor_nos(db: Session, data: dict):
+    """Upsert the nos entries for one (side, kind). Blank / 0 clears that day.
+    Returns an error string, or None on success (house convention)."""
+    side = (data.get("side") or "").strip()
+    kind = (data.get("kind") or "").strip()
+    if side not in TANDOOR_SIDES or not kind:
+        return "Unknown Tandoor row."
+    entries = data.get("entries")
+    if not isinstance(entries, list) or len(entries) > 400:
+        return "Nothing to save."
+    parsed = []
+    for e in entries:
+        try:
+            d = date.fromisoformat(str(e.get("date")))
+        except (ValueError, TypeError, AttributeError):
+            return "Bad date in entries."
+        raw = str(e.get("nos") if e.get("nos") is not None else "").replace(",", "").strip()
+        if raw == "":
+            n = 0
+        else:
+            try:
+                f = float(raw)
+            except ValueError:
+                return "Nos must be a whole number."
+            if f != int(f) or f < 0 or f > 1_000_000:
+                return "Nos must be a whole number."
+            n = int(f)
+        parsed.append((d, n))
+
+    for d, n in parsed:
+        row = (db.query(TandoorNos)
+               .filter_by(entry_date=d, side=side, kind=kind).first())
+        if n == 0:
+            if row:
+                db.delete(row)
+        elif row:
+            row.nos = n
+        else:
+            db.add(TandoorNos(entry_date=d, side=side, kind=kind, nos=n))
+    db.commit()
+    return None
