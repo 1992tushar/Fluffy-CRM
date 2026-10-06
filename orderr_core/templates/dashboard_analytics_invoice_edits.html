@@ -30,11 +30,15 @@ main{max-width:1100px;margin:0 auto;padding:24px 18px 80px}
 .stat .n{font-size:22px;font-weight:800}
 .stat .l{font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
 .wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
-.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
-table{width:100%;border-collapse:collapse;font-size:12.5px}
-th{background:var(--bg);color:var(--ink2);text-align:left;padding:9px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);white-space:nowrap}
+.scroll{overflow-x:hidden}
+table{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:auto}
+th{background:var(--bg);color:var(--ink2);text-align:left;padding:9px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border)}
 th.num,td.num{text-align:right;font-variant-numeric:tabular-nums}
-td{padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;overflow-wrap:anywhere}
+td.num,th.num{white-space:nowrap}
+.sub{display:block;font-size:11px;color:var(--ink3);margin-top:2px;font-weight:400}
+.cust{font-weight:600}
+.src{display:inline-block;font-size:10px;font-weight:700;padding:1px 8px;border-radius:20px;background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border)}
 tr:last-child td{border-bottom:none}
 .tag{display:inline-block;font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px;text-transform:uppercase}
 .tag.receipt{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
@@ -44,6 +48,16 @@ tr.reduced td{background:var(--red-bg)}
 .neg{color:var(--red);font-weight:700}
 .pos{color:var(--green);font-weight:700}
 .empty{color:var(--ink3);text-align:center;padding:22px}
+.lbl{display:none}
+@media(max-width:700px){
+  thead{display:none}
+  table,tbody,tr,td{display:block;width:100%}
+  tr{padding:10px 12px;border-bottom:1px solid var(--border)}
+  tr:last-child{border-bottom:none}
+  td{border:none;padding:2px 0}
+  td.num{text-align:left}
+  .lbl{display:inline;color:var(--ink3);font-size:11px;text-transform:uppercase;letter-spacing:.3px;margin-right:6px}
+}
 </style>
 </head>
 <body>
@@ -76,25 +90,24 @@ tr.reduced td{background:var(--red-bg)}
   <div class="wrap"><div class="scroll">
     <table>
       <thead><tr>
-        <th>Detected</th><th>Source</th><th>Voucher</th><th>Customer</th><th>Date</th><th>Product</th>
-        <th>Change</th><th class="num">Qty (old → new)</th><th class="num">Rate (old → new)</th><th class="num">Impact</th>
+        <th>Customer / voucher</th><th>Product / change</th>
+        <th class="num">Qty (old → new)</th><th class="num">Rate (old → new)</th><th class="num">Impact</th>
       </tr></thead>
       <tbody>
         {% for r in rows %}
         <tr class="{{ 'reduced' if r.reduced else '' }}">
-          <td>{{ r.detected_at }}</td>
-          <td>{{ {'vasy': 'Vasy edit', 'orderr': 'OrdeRR edit', 'orderr_vs_vasy': 'Differs from OrdeRR'}.get(r.source, r.source) }}</td>
-          <td>{{ r.voucher_no }}</td>
-          <td>{{ r.party_name }}</td>
-          <td>{{ r.invoice_date }}</td>
-          <td>{{ r.product_name }}</td>
-          <td>{{ r.change_type }}</td>
-          <td class="num">{{ r.old_qty or '–' }} → {{ r.new_qty or '–' }}</td>
-          <td class="num">{{ r.old_rate or '–' }} → {{ r.new_rate or '–' }}</td>
-          <td class="num {{ 'neg' if r.reduced else 'pos' }}">{{ r.impact_fmt }}</td>
+          <td>
+            <span class="cust">{{ r.party_name }}</span>
+            <span class="sub">{{ r.voucher_no }} · {{ r.invoice_date }}</span>
+            <span class="sub"><span class="src">{{ {'vasy': 'Vasy edit', 'orderr': 'OrdeRR edit', 'orderr_vs_vasy': 'Differs from OrdeRR'}.get(r.source, r.source) }}</span> {{ r.detected_at }}</span>
+          </td>
+          <td>{{ r.product_name }}<span class="sub">{{ r.change_type }}</span></td>
+          <td class="num"><span class="lbl">Qty</span>{{ r.old_qty or '–' }} → {{ r.new_qty or '–' }}</td>
+          <td class="num"><span class="lbl">Rate</span>{{ r.old_rate or '–' }} → {{ r.new_rate or '–' }}</td>
+          <td class="num {{ 'neg' if r.reduced else 'pos' }}"><span class="lbl">Impact</span>{{ r.impact_fmt }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="10" class="empty">No edited invoices in the last 90 days. 👍</td></tr>
+        <tr><td colspan="5" class="empty">No edited invoices in the last 90 days. 👍</td></tr>
         {% endfor %}
       </tbody>
     </table>
