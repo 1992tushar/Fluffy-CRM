@@ -151,7 +151,7 @@ td .sub{display:block;font-size:11px;font-weight:400;color:var(--ink3)}
       <tr><td colspan="7" style="background:var(--bg);font-size:11px;font-weight:700;color:var(--ink2);text-transform:uppercase">Purchased</td></tr>
       {% for r in p.tandoor.bought %}
       <tr><td class="name">{{ r.kind }}{% if r.unit == "pcs" %}<span class="sub">sold per piece</span>{% elif r.side == "sale" and r.unit == "kg" %}<span class="sub">sold by kg</span>{% endif %}</td><td>{{ r.qty }}{% if r.unit %} <span class="sub" style="display:inline">{{ r.unit }}</span>{% endif %}</td>
-        <td>{% if r.auto_nos %}<b>{{ r.nos }}</b><span class="sub">= qty</span>{% else %}<button type="button" class="nosbtn" data-side="{{ r.side }}" data-kind="{{ r.kind }}" title="Add / edit nos by day">{% if r.nos %}<b>{{ r.nos }}</b>{% else %}<span class="add">+ add</span>{% endif %} &#9998;</button>{% endif %}</td>
+        <td>{% if r.nos %}<b>{{ r.nos }}</b><span class="sub">from bills</span>{% else %}<a href="#billwise" style="color:#ea580c;font-size:12px;font-weight:600;text-decoration:none">+ add in bills</a>{% endif %}</td>
         <td>{% if r.avg_wt %}{{ r.avg_wt }}<span class="sub">per bird</span>{% else %}<span style="color:var(--ink3)">&mdash;</span>{% endif %}</td>
         <td>{{ r.amt_fmt }}</td><td><b>&#8377;{{ r.rate }}</b>{% if r.unit %}<span class="sub">per {{ "piece" if r.unit == "pcs" else r.unit }}</span>{% endif %}</td><td>{{ r.bills }}</td></tr>
       {% else %}<tr><td colspan="7" style="color:var(--ink3);text-align:center">No Tandoor purchases in this window</td></tr>{% endfor %}
@@ -230,6 +230,53 @@ td .sub{display:block;font-size:11px;font-weight:400;color:var(--ink3)}
   })();
   </script>
   {% endif %}
+
+  <div class="section-title" id="billwise">🧾 Bill-wise purchases</div>
+  <div class="note">
+    Every purchase bill in this window. On Tandoor lines, enter the <b>number of birds</b> for that bill &mdash;
+    the Tandoor section above shows the running total. Type the count and press Enter or click away to save.
+  </div>
+  <div class="card">
+    <table>
+      <tr><th>Date</th><th>Bill</th><th>Supplier</th><th style="text-align:left">Items</th><th>Amount</th></tr>
+      {% for b in p.bills %}
+      <tr style="vertical-align:top">
+        <td>{{ b.date_fmt }}</td><td>{{ b.bill }}</td>
+        <td class="name">{{ b.supplier }}</td>
+        <td style="text-align:left;white-space:normal">
+          {% for ln in b.lines %}
+          <div style="padding:2px 0">{{ ln.item }} <span class="sub" style="display:inline">&middot; {{ ln.qty }} @ &#8377;{{ ln.rate }}</span>
+            {% if ln.kind and not ln.kind_dup %}
+            <span style="margin-left:6px;white-space:nowrap">&#128037; Nos
+              <input type="number" min="0" step="1" inputmode="numeric" class="billnos" data-bill="{{ b.bill }}" data-kind="{{ ln.kind }}" value="{{ ln.nos if ln.nos else '' }}" data-orig="{{ ln.nos if ln.nos else '' }}" style="width:76px;font:inherit;padding:2px 6px;border:1px solid #f5a623;border-radius:6px;text-align:right">
+            </span>
+            {% if ln.nos and ln.qty_raw %}<span class="sub" style="display:inline">&middot; {{ (ln.qty_raw / ln.nos)|round(2) }} per bird</span>{% endif %}
+            {% endif %}
+          </div>
+          {% endfor %}
+        </td>
+        <td>{{ b.amt_fmt }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  <script>
+  (function(){
+    Array.prototype.forEach.call(document.querySelectorAll('.billnos'),function(i){
+      function save(){
+        if(i.value===i.dataset.orig)return;
+        i.disabled=true;
+        fetch('/dashboard/analytics/purchases/bill-nos',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({bill:i.dataset.bill,kind:i.dataset.kind,nos:i.value})})
+          .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
+          .then(function(x){if(x.ok){location.reload();}else{i.disabled=false;alert(x.j.detail||'Could not save.');}})
+          .catch(function(){i.disabled=false;alert('Could not save.');});
+      }
+      i.addEventListener('change',save);
+      i.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();i.blur();}});
+    });
+  })();
+  </script>
 
   <div class="section-title">Items purchased</div>
   <div class="card" style="padding:14px 16px">

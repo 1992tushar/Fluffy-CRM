@@ -80,6 +80,22 @@ def tandoor_days(
     return JSONResponse({"days": purchase_analytics.tandoor_days(db, side, kind, start, end)})
 
 
+@router.post("/analytics/purchases/bill-nos")
+async def bill_nos_save(
+    request: Request,
+    db: Session = Depends(get_db),
+    username: str = Depends(require_auth),
+):
+    """Save the bird count (nos) for one Tandoor line on one purchase bill."""
+    from orderr_core.services import purchase_analytics
+
+    body = await request.json()
+    err = purchase_analytics.save_bill_nos(db, body)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    return JSONResponse({"status": "ok"})
+
+
 @router.post("/analytics/purchases/tandoor-nos")
 async def tandoor_nos_save(
     request: Request,

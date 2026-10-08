@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from orderr_core.models.vasy_sales_item import VasySalesItem
 from orderr_core.models.tandoor_nos import TandoorNos
+from orderr_core.models.tandoor_bill_nos import TandoorBillNos
 from orderr_core.models.vasy_purchase import VasyPurchase, VasyPurchaseItem
 from orderr_core.services.analytics_service import fmt_inr
 from orderr_core.utils import fmt_qty
@@ -164,6 +165,7 @@ def purchase_overview(db: Session, start: date, end: date) -> dict:
         "by_supplier": suppliers,
         "flags": rate_flags(db, start, end),
         "tandoor": tandoor_summary(db, start, end),
+        "bills": purchase_bills(db, start, end),
     }
 
 
@@ -255,9 +257,14 @@ def tandoor_summary(db: Session, start: date, end: date) -> dict:
 
     nos = {}
     for side, kind, n in (db.query(TandoorNos.side, TandoorNos.kind, func.sum(TandoorNos.nos))
-                          .filter(TandoorNos.entry_date >= start, TandoorNos.entry_date <= end)
+                          .filter(TandoorNos.side == "sale",
+                                  TandoorNos.entry_date >= start, TandoorNos.entry_date <= end)
                           .group_by(TandoorNos.side, TandoorNos.kind).all()):
         nos[(side, kind)] = int(n or 0)
+    # Purchased nos are entered per bill; accumulate those for the bills in the window.
+    saved = _bill_nos(db)
+    for k, v in bought.items():
+        nos[("purchase", k)] = sum(saved.get((b, k), 0) for b in v[2])
 
     def pack(d, side, with_bills):
         out = []
@@ -298,6 +305,74 @@ def tandoor_summary(db: Session, start: date, end: date) -> dict:
 
 
 TANDOOR_SIDES = ("purchase", "sale")
+
+
+def _bill_nos(db: Session) -> dict:
+    return {(r.bill_no, r.kind): r.nos for r in db.query(TandoorBillNos).all()}
+
+
+def purchase_bills(db: Session, start: date, end: date) -> list:
+    """Bill-wise purchase entries, newest first. Tandoor lines carry the saved bird
+    count so it can be edited against the bill."""
+    saved = _bill_nos(db)
+    bills = {}
+    for l in _lines(db, start, end):
+        b = bills.setdefault(l["bill"], {"bill": l["bill"], "date": l["date"],
+                                         "supplier": l["supplier"], "amt": 0.0, "lines": []})
+        b["amt"] += l["amt"]
+        kind = _tandoor_kind(l["item"])
+        b["lines"].append({"item": l["item"], "qty": fmt_qty(round(l["qty"], 1)),
+                           "qty_raw": l["qty"], "rate": round(l["rate"], 2),
+                           "amt_fmt": fmt_inr(l["amt"]), "kind": kind,
+                           "nos": saved.get((l["bill"], kind)) if kind else None})
+    out = sorted(bills.values(), key=lambda b: (b["date"], b["bill"]), reverse=True)
+    for b in out:
+        b["date_fmt"] = b["date"].strftime("%d %b")
+        b["amt_fmt"] = fmt_inr(b["amt"])
+        # Same kind twice on one bill would share one count; show it on the first only.
+        seen = set()
+        for ln in b["lines"]:
+            if ln["kind"]:
+                if ln["kind"] in seen:
+                    ln["kind_dup"] = True
+                seen.add(ln["kind"])
+        b["has_tandoor"] = any(ln["kind"] for ln in b["lines"])
+        b["tandoor_nos"] = sum(ln["nos"] or 0 for ln in b["lines"] if ln["kind"] and not ln.get("kind_dup"))
+    return out
+
+
+def save_bill_nos(db: Session, data: dict):
+    """Upsert the bird count for one Tandoor kind on one bill. Blank / 0 clears it.
+    Returns an error string, or None on success (house convention)."""
+    bill = str(data.get("bill") or "").strip()
+    kind = str(data.get("kind") or "").strip()
+    if not bill or not kind:
+        return "Unknown bill."
+    exists = (db.query(VasyPurchase.id).filter(VasyPurchase.bill_no == bill).first()
+              if bill else None)
+    if not exists:
+        return "Bill not found."
+    raw = str(data.get("nos") if data.get("nos") is not None else "").replace(",", "").strip()
+    if raw == "":
+        n = 0
+    else:
+        try:
+            f = float(raw)
+        except ValueError:
+            return "Nos must be a whole number."
+        if f != int(f) or f < 0 or f > 1_000_000:
+            return "Nos must be a whole number."
+        n = int(f)
+    row = db.query(TandoorBillNos).filter_by(bill_no=bill, kind=kind).first()
+    if n == 0:
+        if row:
+            db.delete(row)
+    elif row:
+        row.nos = n
+    else:
+        db.add(TandoorBillNos(bill_no=bill, kind=kind, nos=n))
+    db.commit()
+    return None
 
 
 def tandoor_days(db: Session, side: str, kind: str, start: date, end: date) -> list:

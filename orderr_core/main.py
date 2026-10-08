@@ -100,6 +100,7 @@ from orderr_core.models.analytics_pref import AnalyticsPref              # noqa:
 # Manual accrual overheads (Salaries + Daily saving) folded into Business Net
 from orderr_core.models.monthly_overhead import MonthlyOverhead          # noqa: F401
 from orderr_core.models.tandoor_nos import TandoorNos                          # noqa: F401
+from orderr_core.models.tandoor_bill_nos import TandoorBillNos                  # noqa: F401
 
 
 Base.metadata.create_all(bind=engine)
