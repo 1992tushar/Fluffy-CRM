@@ -209,7 +209,7 @@ def receivable_model(db: Session, today: date) -> dict:
         if i not in last_rec or d > last_rec[i]:
             last_rec[i] = d
 
-    bad = {c for (c,) in db.query(BadDebt.customer_id)}
+    bad = {b.customer_id: b for b in db.query(BadDebt)}
     # table is created at app start; tolerate a DB that has not been migrated yet
     from sqlalchemy import inspect as _inspect
     decisions = ({d.customer_id: d for d in db.query(MoneyDecision)}
@@ -258,7 +258,7 @@ def receivable_model(db: Session, today: date) -> dict:
             "days_since_receipt": (today - s_last).days if s_last else None,
             "prev": p, "trend": (closing - p) if p is not None else None,
             "cat": cat, "reason": _reason(cat, closing, monthly, coll, months, old60),
-            "written_off": s.customer_id in bad,
+            "written_off": s.customer_id in bad, "wo": bad.get(s.customer_id),
             "decision": decisions.get(s.customer_id),
             "dormant": closing > 0 and s_sales60 == 0,
         })
@@ -281,8 +281,9 @@ CAT_ACTION = {
     "C": "Advance / cash-on-delivery for new orders; weekly instalments on the old balance",
     "D": "No new credit until part-payment of the old balance arrives; cash only meanwhile",
     "F": "No billing for 60+ days: confirm balance, then pursue or provide",
+    "W": "Written off in the CRM but still owed in the Vasy ledger: decide to pursue it or let it go for good",
 }
-CAT_NAME = {"A": "Retain", "B": "Reduced limit", "C": "Advance / COD", "D": "Credit hold", "F": "Dormant"}
+CAT_NAME = {"A": "Retain", "B": "Reduced limit", "C": "Advance / COD", "D": "Credit hold", "F": "Dormant", "W": "Written off"}
 
 
 def _reason(cat, closing, monthly, coll, months, old60) -> str:
@@ -320,15 +321,22 @@ def customers_block(db: Session, today: date) -> dict:
     m = receivable_model(db, today)
     if not m["has_data"]:
         return {"has_data": False}
-    rows = [r for r in m["customers"] if r["closing"] > 0 and not r["written_off"]]
-    for r in rows:
+    allrows = [r for r in m["customers"] if r["closing"] > 0]
+    for r in allrows:
         if r.get("hint"):
             r["reason"] = r["reason"] + " · " + r["hint"]
+        if r["written_off"]:                      # shown, but kept out of the live-receivable totals
+            wo = r["wo"]
+            r["cat"] = "W"
+            r["reason"] = (f"Written off {wo.written_off_on:%d %b %Y}: {wo.reason}" + (f" — “{wo.note}”" if wo.note else "")
+                           + " · still in the Vasy ledger")
+    rows = [r for r in allrows if not r["written_off"]]
+    written = [r for r in allrows if r["written_off"]]
     gross = sum(r["closing"] for r in rows)
     over30 = sum(r["over30"] for r in rows)
     cats = {}
-    for c in "ABCDF":
-        rs = [r for r in rows if r["cat"] == c]
+    for c in "ABCDFW":
+        rs = [r for r in (allrows if c == "W" else rows) if r["cat"] == c]
         cats[c] = {"n": len(rs), "bal": sum(r["closing"] for r in rs), "sales30": sum(r["sales30"] for r in rs),
                    "over30": sum(r["over30"] for r in rs)}
     ages = {k: sum(r["age"][k] for r in rows) for k in ("0-30", "31-60", "61-90", "90+", "pre_fy")}
@@ -337,7 +345,8 @@ def customers_block(db: Session, today: date) -> dict:
     return {"has_data": True, "snap_date": m["snap_date"], "gross": gross, "over30": over30,
             "over30_pct": (over30 / gross) if gross else 0, "cats": cats, "ages": ages,
             "top": top, "dormant": dormant[:40], "dormant_total": sum(r["closing"] for r in dormant),
-            "dormant_n": len(dormant), "all": rows}
+            "dormant_n": len(dormant), "all": allrows,
+            "written_total": sum(r["closing"] for r in written), "written_n": len(written)}
 
 
 # ═══════════════════════════════════════════════════════════════════════════

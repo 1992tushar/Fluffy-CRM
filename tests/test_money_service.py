@@ -166,3 +166,20 @@ db2.add(VasyInvoice(voucher_no="INVS1", invoice_date=TODAY - timedelta(days=2), 
 rs = [r for r in ms.customers_block(db2, TODAY)["all"] if r["key"] == "SAIRATBIRYANIRAVET"][0]
 check(rs["dormant"] and rs["hint"] and "Sairat Biryani" in rs["hint"], "dormant row gets a 'possibly same hotel' hint")
 print("HINT PASSED")
+
+# ---- written-off customers stay visible (category W) but are excluded from live receivable totals
+from orderr_core.models.bad_debt import BadDebt  # noqa: E402
+c5 = Customer(restaurant_name="Monty", phone_number="9000000005"); db2.add(c5); db2.commit()
+db2.add(OutstandingSnapshot(customer_id=c5.id, party_name="Monty Dabhade", party_key="MONTYDABHADE", opening_balance=199410,
+                            debit=0, credit=0, closing=199410, snapshot_date=TODAY))
+db2.add(BadDebt(customer_id=c5.id, amount=199410, reason="Dispute", note="parked", written_off_on=TODAY)); db2.commit()
+before = ms.customers_block(db2, TODAY)
+mrow = [r for r in before["all"] if r["key"] == "MONTYDABHADE"]
+check(len(mrow) == 1 and mrow[0]["cat"] == "W" and "Written off" in mrow[0]["reason"], "written-off customer is listed as W with the reason")
+check(before["cats"]["W"]["n"] == 1 and abs(before["written_total"] - 199410) < 0.01, "written-off total reported separately")
+check(not any(r["key"] == "MONTYDABHADE" for r in before["dormant"]), "written-off customer not in the dormant list")
+html = make_templates().get_template("dashboard_analytics_money.html").render(
+    request=None, plant_name="T", current_time="now", m=ms.build(db2, TODAY), analytics_view="money",
+    cat_action=ms.CAT_ACTION, cat_name=ms.CAT_NAME, categories=[])
+check("Monty Dabhade" in html, "written-off customer appears on the page")
+print("WRITTEN-OFF PASSED")

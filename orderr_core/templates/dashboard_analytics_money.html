@@ -69,7 +69,8 @@ select,input[type=text]{font-size:12px;padding:5px 8px;border:1px solid var(--bo
 .catbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
 .catbtn{font-size:12px;padding:6px 12px;border-radius:20px;border:1px solid var(--border-strong);background:var(--surface);color:var(--ink2);cursor:pointer}
 .catbtn.on{outline:2px solid var(--ink);font-weight:700}
-.catbtn.cat-D{background:var(--red-bg);border-color:var(--red-border);color:var(--red)}.catbtn.cat-C{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber)}.catbtn.cat-B{background:var(--blue-bg);border-color:var(--blue-border);color:var(--blue)}.catbtn.cat-A,.catbtn.cat-F{background:var(--green-bg);border-color:var(--green-border);color:var(--green)}
+.catbtn.cat-D{background:var(--red-bg);border-color:var(--red-border);color:var(--red)}.catbtn.cat-C{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber)}.catbtn.cat-B{background:var(--blue-bg);border-color:var(--blue-border);color:var(--blue)}.catbtn.cat-W{background:#ede9fe;border-color:#c4b5fd;color:#5b21b6}.cat-W{background:#ede9fe;border-color:#c4b5fd;color:#5b21b6}
+.catbtn.cat-A,.catbtn.cat-F{background:var(--green-bg);border-color:var(--green-border);color:var(--green)}
 #custtbl th{cursor:pointer}
 </style>
 </head>
@@ -216,8 +217,8 @@ select,input[type=text]{font-size:12px;padding:5px 8px;border:1px solid var(--bo
   <div class="two">
     <div class="wrap"><div class="scroll"><table>
       <thead><tr><th>Category</th><th class="num">Customers</th><th class="num">Sales (30d)</th><th class="num">Owed</th><th class="num">Older than 30d</th></tr></thead>
-      <tbody>{% for k in ['A','B','C','D','F'] %}{% set x = c.cats[k] %}<tr><td><span class="cat cat-{{ k }}">{{ k }}</span></td><td class="num">{{ x.n }}</td><td class="num">{{ inr(x.sales30) }}</td><td class="num">{{ inr(x.bal) }}</td><td class="num">{{ inr(x.over30) }}</td></tr>{% endfor %}
-      <tr class="tot"><td>Total</td><td class="num"></td><td class="num"></td><td class="num">{{ inr(c.gross) }}</td><td class="num">{{ inr(c.over30) }} ({{ pct(c.over30_pct) }})</td></tr></tbody></table></div></div>
+      <tbody>{% for k in ['A','B','C','D','F','W'] %}{% set x = c.cats[k] %}<tr><td><span class="cat cat-{{ k }}">{{ k }}</span></td><td class="num">{{ x.n }}</td><td class="num">{{ inr(x.sales30) }}</td><td class="num">{{ inr(x.bal) }}</td><td class="num">{{ inr(x.over30) }}</td></tr>{% endfor %}
+      <tr class="tot"><td>Total (excl. written off)</td><td class="num"></td><td class="num"></td><td class="num">{{ inr(c.gross) }}</td><td class="num">{{ inr(c.over30) }} ({{ pct(c.over30_pct) }})</td></tr></tbody></table></div></div>
     <div class="wrap"><div class="scroll"><table>
       <thead><tr><th>Age of balance</th><th class="num">Amount</th><th class="num">Share</th></tr></thead>
       <tbody>{% for k,lab in [('0-30','0–30 days'),('31-60','31–60 days'),('61-90','61–90 days'),('90+','Over 90 days'),('pre_fy','Before this financial year')] %}<tr><td>{{ lab }}</td><td class="num">{{ inr(c.ages[k]) }}</td><td class="num">{{ pct(c.ages[k] / c.gross if c.gross else 0) }}</td></tr>{% endfor %}</tbody></table></div></div>
@@ -226,7 +227,7 @@ select,input[type=text]{font-size:12px;padding:5px 8px;border:1px solid var(--bo
   <div class="sub" style="margin-top:16px">All customers with a balance — click a category to filter, type to search, click a column heading to sort.</div>
   <div class="catbar" id="catbar">
     <button class="catbtn on" data-c="ALL" onclick="filt('ALL')">All <b>{{ c.all|length }}</b></button>
-    {% for k in ['D','C','B','A','F'] %}<button class="catbtn cat-{{ k }}" data-c="{{ k }}" onclick="filt('{{ k }}')"><b>{{ k }}</b> {{ cat_name[k] }} · {{ c.cats[k].n }} · {{ inr(c.cats[k].bal) }}</button>{% endfor %}
+    {% for k in ['D','C','B','A','F','W'] %}<button class="catbtn cat-{{ k }}" data-c="{{ k }}" onclick="filt('{{ k }}')"><b>{{ k }}</b> {{ cat_name[k] }} · {{ c.cats[k].n }} · {{ inr(c.cats[k].bal) }}</button>{% endfor %}
     <input type="text" id="custq" placeholder="search hotel…" oninput="applyFilter()" style="margin-left:auto;min-width:180px">
   </div>
   <div id="catnote" class="note" style="display:none"></div>
