@@ -66,6 +66,8 @@ select,input[type=text]{font-size:12px;padding:5px 8px;border:1px solid var(--bo
 .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 @media(max-width:820px){.two{grid-template-columns:1fr}}
 #drill{display:none;margin-top:12px}
+.dl{color:inherit;text-decoration:underline;text-underline-offset:2px;cursor:pointer}.dl:hover{background:var(--amber-bg)}
+.drillhead{display:flex;gap:12px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg)}.drillhead .btn{margin-left:auto}
 .catbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
 .catbtn{font-size:12px;padding:6px 12px;border-radius:20px;border:1px solid var(--border-strong);background:var(--surface);color:var(--ink2);cursor:pointer}
 .catbtn.on{outline:2px solid var(--ink);font-weight:700}
@@ -76,6 +78,7 @@ select,input[type=text]{font-size:12px;padding:5px 8px;border:1px solid var(--bo
 </head>
 <body>
 {% macro inr(x) -%}{% if x is none %}—{% else %}₹{{ '{:,.0f}'.format(x) }}{% endif %}{%- endmacro %}
+{% macro lnk(month, klass, title, amt) -%}{% if amt %}<a href="#" class="dl" onclick="drillTo('{{ month }}','{{ klass }}','dOwner','{{ title }}');return false">{{ inr(amt) }}</a>{% else %}<span class="muted">{{ inr(0) }}</span>{% endif %}{%- endmacro %}
 {% macro pct(x) -%}{% if x is none %}—{% else %}{{ '{:.0%}'.format(x) }}{% endif %}{%- endmacro %}
 
 <div class="nav">
@@ -143,15 +146,16 @@ select,input[type=text]{font-size:12px;padding:5px 8px;border:1px solid var(--bo
     <thead><tr><th>Month</th><th class="num">Savings / RD</th><th class="num">Transfers</th><th class="num">Card bills</th><th class="num">Cash drawings</th><th class="num">Total OUT</th><th class="num">% of bank outflow</th><th class="num">Put IN (confirmed)</th><th class="num">Unconfirmed IN</th><th class="num">NET out</th></tr></thead>
     <tbody>
     {% for r in o.rows %}<tr>
-      <td>{{ r.month }}{% if r.partial %} <span class="muted">(so far)</span>{% endif %}{% if r.no_bank %}<div class="red" style="font-size:10px">no bank data</div>{% endif %}{% if r.incomplete %}<div class="red" style="font-size:10px">⚠ {{ inr(r.untagged) }} untagged ({{ pct(r.untagged_pct) }}) — owner figure incomplete</div>{% endif %}</td>
-      <td class="num">{{ inr(r.savings) }}</td><td class="num">{{ inr(r.transfers) }}</td><td class="num">{{ inr(r.cards) }}</td><td class="num">{{ inr(r.drawings) }}</td>
-      <td class="num red"><b><a href="#" onclick="drill('{{ r.month }}','owner');return false" style="color:inherit">{{ inr(r.out) }}</a></b></td>
+      <td>{{ r.month }}{% if r.partial %} <span class="muted">(so far)</span>{% endif %}{% if r.no_bank %}<div class="red" style="font-size:10px">no bank data</div>{% endif %}{% if r.incomplete %}<div class="red" style="font-size:10px">⚠ <a href="#" class="dl" onclick="drillTo('{{ r.month }}','unclassified','dOwner','Untagged payments');return false">{{ inr(r.untagged) }} untagged</a> ({{ pct(r.untagged_pct) }}) — owner figure incomplete</div>{% endif %}</td>
+      <td class="num">{{ lnk(r.month,'owner_savings','Savings / RD',r.savings) }}</td><td class="num">{{ lnk(r.month,'owner_transfers','Transfers',r.transfers) }}</td><td class="num">{{ lnk(r.month,'owner_cards','Card bills',r.cards) }}</td><td class="num">{{ lnk(r.month,'owner_drawings','Cash drawings',r.drawings) }}</td>
+      <td class="num red"><b>{{ lnk(r.month,'owner','Total taken out',r.out) }}</b></td>
       <td class="num">{{ pct(r.out_pct) }}</td>
-      <td class="num green">{% if r.in_confirmed %}<a href="#" onclick="drill('{{ r.month }}','owner_in');return false" style="color:inherit">{{ inr(r.in_confirmed) }}</a>{% else %}{{ inr(0) }}{% endif %}</td>
-      <td class="num amber">{% if r.in_unconfirmed %}<a href="#" onclick="drill('{{ r.month }}','owner_in_unconfirmed');return false" style="color:inherit">{{ inr(r.in_unconfirmed) }}</a>{% else %}{{ inr(0) }}{% endif %}</td>
-      <td class="num {{ 'red' if r.net > 0 else 'green' }}"><b>{{ inr(r.net) }}</b></td></tr>{% endfor %}
+      <td class="num green">{{ lnk(r.month,'owner_in','Put in (confirmed)',r.in_confirmed) }}</td>
+      <td class="num amber">{{ lnk(r.month,'owner_in_unconfirmed','Unconfirmed credits',r.in_unconfirmed) }}</td>
+      <td class="num {{ 'red' if r.net > 0 else 'green' }}"><b>{{ lnk(r.month,'owner_net','Net: taken out and put in',r.net) }}</b></td></tr>{% endfor %}
     <tr class="tot"><td>Total</td><td colspan="4"></td><td class="num">{{ inr(o.total_out) }}</td><td></td><td class="num">{{ inr(o.total_in) }}</td><td class="num">{{ inr(o.total_unconf) }}</td><td class="num">{{ inr(o.net) }}</td></tr>
     </tbody></table></div></div>
+  <div id="dOwner" class="wrap" style="display:none;margin-top:12px"><div class="drillhead"><b id="dOwnerTitle"></b><span id="dOwnerSum" class="muted"></span><button class="btn ghost" onclick="document.getElementById('dOwner').style.display='none'">Close</button></div><div class="scroll"><table><thead><tr><th>Date</th><th>Out/In</th><th class="num">Amount</th><th>Counterparty</th><th>Narration</th><th>Tag / remark</th><th>Source</th></tr></thead><tbody id="dOwnerBody"></tbody></table></div></div>
   <div class="note">A month with "no bank data" shows ₹0 out only because no statement was uploaded — it is not a month with no drawings. Untagged payments do not count as OUT until you tag them below: {{ inr(o.untagged_out) }} is untagged in this window and some of it may be owner money. Money you put in also needs a tag — see "Untagged credits" below ({{ m.unclass_in|length }} waiting).</div>
 
   <!-- ══ 2. WHERE THE MONEY WENT ══ -->
@@ -364,6 +368,19 @@ function tagTxn(id){
 function decide(cid){
   var d=document.getElementById('dd'+cid).value, n=document.getElementById('dn'+cid).value;
   post('/dashboard/analytics/money/decision',{customer_id:cid,decision:d,note:n}).then(function(){ location.reload(); }).catch(function(e){ alert(e.message); });
+}
+function drillTo(month,klass,boxId,title){
+  fetch('/dashboard/analytics/money/drill?month='+month+'&klass='+klass).then(function(r){return r.json();}).then(function(j){
+    var b=document.getElementById(boxId+'Body'); b.innerHTML='';
+    j.rows.forEach(function(r){
+      b.insertAdjacentHTML('beforeend','<tr><td>'+esc(r.date)+'</td><td>'+(r.dir==='in'?'<span class="green">IN</span>':'<span class="red">OUT</span>')+'</td><td class="num"><b>₹'+Math.round(r.amount).toLocaleString('en-IN')+'</b></td><td>'+esc(r.counterparty)+'</td><td>'+esc(r.desc)+'</td><td>'+esc(r.category||"")+(r.remark?' · '+esc(r.remark):"")+'</td><td>'+esc(r.source)+'</td></tr>');
+    });
+    if(!j.rows.length) b.innerHTML='<tr><td colspan="7" class="muted">No payments.</td></tr>';
+    document.getElementById(boxId+'Title').textContent=month+' · '+title+' · '+j.rows.length+' payment'+(j.rows.length===1?"":"s");
+    var s=[]; if(j.total_out) s.push('out ₹'+Math.round(j.total_out).toLocaleString('en-IN')); if(j.total_in) s.push('in ₹'+Math.round(j.total_in).toLocaleString('en-IN'));
+    document.getElementById(boxId+'Sum').textContent=s.join(' · ');
+    var d=document.getElementById(boxId); d.style.display='block'; d.scrollIntoView({behavior:'smooth',block:'nearest'});
+  });
 }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 function drill(month,klass){

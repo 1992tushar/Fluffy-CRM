@@ -52,12 +52,13 @@ def analytics_money_drill(
     db: Session = Depends(get_db),
     username: str = Depends(require_auth),
 ):
-    if klass not in money_service.CLASSES + list(money_service.OWNER_IN_CLASSES):
+    if klass not in money_service.CLASSES and klass not in money_service.OWNER_DRILLS:
         raise HTTPException(status_code=400, detail="Unknown class.")
     rows = money_service.txn_drilldown(db, month, klass)
     for r in rows:
         r["date"] = r["date"].isoformat() if r["date"] else ""
-    return JSONResponse({"rows": rows})
+    return JSONResponse({"rows": rows, "total_out": sum(x["amount"] for x in rows if x["dir"] == "out"),
+                         "total_in": sum(x["amount"] for x in rows if x["dir"] == "in")})
 
 
 @router.post("/analytics/money/decision")

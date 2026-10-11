@@ -400,35 +400,50 @@ def outflow_by_class(db: Session, today: date, months: int = 4) -> dict:
     return {"months": out, "labels": CLASS_LABEL, "classes": CLASSES}
 
 
+OWNER_OUT_PARTS = {"owner_savings": "investment_savings", "owner_transfers": "internal_transfer",
+                   "owner_cards": "credit_card_bill"}
+
+
+def _row(t, direction):
+    return {"id": t.id, "date": t.value_date, "amount": _f(t.amount), "dir": direction, "source": "Bank",
+            "desc": (t.description or "")[:90], "counterparty": t.counterparty_raw or "", "category": t.category,
+            "remark": (t.remark or "") + (f" -> {t.party_label}" if t.party_label else "")}
+
+
 def txn_drilldown(db: Session, month: str, klass: str, limit: int = 300) -> list[dict]:
+    """Payments behind one number on the Money tab. Every amount in the owner
+    table maps to a class here, so a click always lists exactly what was added up."""
     y, m = int(month[:4]), int(month[5:7])
     a = date(y, m, 1)
     b = _add_months(a, 1)
-    out = []
-    if klass in OWNER_IN_CLASSES:
-        q = db.query(BankTransaction).filter(BankTransaction.value_date >= a, BankTransaction.value_date < b,
-                                             BankTransaction.direction == "cr").order_by(BankTransaction.amount.desc())
-        for t in q:
-            if owner_in_kind(t) != klass:
-                continue
-            out.append({"id": t.id, "date": t.value_date, "amount": _f(t.amount), "desc": (t.description or "")[:90],
-                        "counterparty": t.counterparty_raw or "", "category": t.category, "remark": (t.remark or "") + (f" -> {t.party_label}" if t.party_label else "")})
-        return out[:limit]
-    q = db.query(BankTransaction).filter(BankTransaction.value_date >= a, BankTransaction.value_date < b,
-                                         BankTransaction.direction == "dr").order_by(BankTransaction.amount.desc())
-    for t in q:
-        if classify_txn(t) != klass:
-            continue
-        out.append({"id": t.id, "date": t.value_date, "amount": _f(t.amount), "desc": (t.description or "")[:90],
-                    "counterparty": t.counterparty_raw or "", "category": t.category, "remark": t.remark or ""})
-        if len(out) >= limit:
-            break
-    if klass == "owner":                      # cash drawings from the Cash Book belong to the same story
+    out: list[dict] = []
+    want_out = None
+    if klass in ("owner", "owner_net"):
+        want_out = ("investment_savings", "internal_transfer", "credit_card_bill")
+    elif klass in OWNER_OUT_PARTS:
+        want_out = (OWNER_OUT_PARTS[klass],)
+    if want_out:
+        for t in db.query(BankTransaction).filter(BankTransaction.value_date >= a, BankTransaction.value_date < b,
+                                                  BankTransaction.direction == "dr",
+                                                  BankTransaction.category.in_(want_out)):
+            out.append(_row(t, "out"))
+    if klass in ("owner", "owner_net", "owner_drawings"):         # cash drawings belong to the same story
         for e in db.query(CashEntry).filter(CashEntry.entry_date >= a, CashEntry.entry_date < b, CashEntry.type == "drawing"):
-            out.append({"id": None, "date": e.entry_date, "amount": _f(e.amount), "desc": "Cash drawing (Cash Book)",
-                        "counterparty": "Owner", "category": "drawing", "remark": e.note or ""})
-        out.sort(key=lambda r: -r["amount"])
-    return out
+            out.append({"id": None, "date": e.entry_date, "amount": _f(e.amount), "dir": "out", "source": "Cash book",
+                        "desc": "Cash drawing", "counterparty": "Owner", "category": "drawing", "remark": e.note or ""})
+    if klass in OWNER_IN_CLASSES or klass == "owner_net":
+        for t in db.query(BankTransaction).filter(BankTransaction.value_date >= a, BankTransaction.value_date < b,
+                                                  BankTransaction.direction == "cr"):
+            kind = owner_in_kind(t)
+            if kind == klass or (klass == "owner_net" and kind == "owner_in"):
+                out.append(_row(t, "in"))
+    if klass in CLASSES and klass != "owner":                      # plain class drill (bars, untagged amount)
+        for t in db.query(BankTransaction).filter(BankTransaction.value_date >= a, BankTransaction.value_date < b,
+                                                  BankTransaction.direction == "dr"):
+            if classify_txn(t) == klass:
+                out.append(_row(t, "out"))
+    out.sort(key=lambda r: -r["amount"])
+    return out[:limit]
 
 
 def unclassified_credits(db: Session, today: date, days: int = 45, limit: int = 40) -> list[dict]:
@@ -462,6 +477,7 @@ def unclassified_recent(db: Session, today: date, days: int = 45, limit: int = 4
 # 4b. Owner account — taken OUT of Fluffy vs put IN
 # ═══════════════════════════════════════════════════════════════════════════
 OWNER_IN_CLASSES = ("owner_in", "owner_in_unconfirmed")
+OWNER_DRILLS = ("owner", "owner_net", "owner_drawings", "owner_savings", "owner_transfers", "owner_cards", *OWNER_IN_CLASSES)
 
 
 def _promoter_credit(t) -> bool:

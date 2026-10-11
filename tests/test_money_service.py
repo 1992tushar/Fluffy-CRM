@@ -200,3 +200,17 @@ db2.commit()
 uc = ms.unclassified_credits(db2, TODAY)
 check(any(x["amount"] == 88000 for x in uc), "untagged 88,000 credit is listed for tagging")
 print("UNTAGGED-CREDIT PASSED")
+
+# ---- every owner-table number can be drilled: the parts add up to the cell
+sv = ms.txn_drilldown(db2, "2026-10", "owner_savings"); tr = ms.txn_drilldown(db2, "2026-10", "owner_transfers")
+dw = ms.txn_drilldown(db2, "2026-10", "owner_drawings"); tot = ms.txn_drilldown(db2, "2026-10", "owner")
+rr = [x for x in ms.owner_flows(db2, TODAY, months=2)["rows"] if x["month"] == "2026-10"][0]
+check(abs(sum(x["amount"] for x in sv) - rr["savings"]) < 0.01, "savings drill adds up to the savings cell")
+check(abs(sum(x["amount"] for x in tr) - rr["transfers"]) < 0.01, "transfers drill adds up to the transfers cell")
+check(abs(sum(x["amount"] for x in dw) - rr["drawings"]) < 0.01, "drawings drill adds up to the drawings cell")
+check(abs(sum(x["amount"] for x in tot) - rr["out"]) < 0.01, "total-out drill adds up to the total cell")
+nt = ms.txn_drilldown(db2, "2026-10", "owner_net")
+check(abs(sum(x["amount"] for x in nt if x["dir"] == "out") - sum(x["amount"] for x in nt if x["dir"] == "in") - rr["net"]) < 0.01, "net drill: out minus in equals the net cell")
+inn = ms.txn_drilldown(db2, "2026-10", "owner_in")
+check(abs(sum(x["amount"] for x in inn) - rr["in_confirmed"]) < 0.01, "put-in drill adds up to the put-in cell")
+print("DRILL PASSED")
