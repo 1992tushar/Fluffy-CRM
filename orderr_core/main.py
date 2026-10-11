@@ -26,6 +26,7 @@ from orderr_core.routes.wastage import router as wastage_router
 from orderr_core.routes.purchases import router as purchases_router
 from orderr_core.routes.reminders import router as reminders_router
 from orderr_core.routes.broadcast import router as broadcast_router
+from orderr_core.routes.money import router as money_router
 from orderr_core.routes.status_report import router as status_report_router
 from orderr_core.services.reporter import send_daily_report
 from orderr_core.services.pending_notifier import notify_salespersons_pending
@@ -100,6 +101,8 @@ from orderr_core.models.analytics_pref import AnalyticsPref              # noqa:
 # Manual accrual overheads (Salaries + Daily saving) folded into Business Net
 from orderr_core.models.monthly_overhead import MonthlyOverhead          # noqa: F401
 from orderr_core.models.tandoor_nos import TandoorNos                          # noqa: F401
+# Money tab — owner's pursue/provide call on dormant balances (OrdeRR-side note only)
+from orderr_core.models.money_decision import MoneyDecision                    # noqa: F401
 from orderr_core.models.tandoor_bill_nos import TandoorBillNos                  # noqa: F401
 
 
@@ -695,6 +698,7 @@ app.include_router(wastage_router,  prefix="/dashboard", tags=["Analytics"])
 app.include_router(purchases_router, prefix="/dashboard", tags=["Analytics"])
 app.include_router(reminders_router, prefix="/dashboard", tags=["Reminders"])
 app.include_router(broadcast_router, prefix="/dashboard", tags=["Broadcast"])
+app.include_router(money_router, prefix="/dashboard", tags=["Analytics"])
 app.include_router(status_report_router, tags=["Reports"])   # public /r/<key>, no auth
 
 

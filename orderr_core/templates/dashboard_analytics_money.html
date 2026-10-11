@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ plant_name }} · Money control</title>
+<style>
+:root{
+  --ink:#1a1a18;--ink2:#5a5a54;--ink3:#9a9a90;
+  --bg:#f4f3ef;--surface:#fff;--border:rgba(0,0,0,0.09);--border-strong:rgba(0,0,0,0.15);
+  --green:#1a6b41;--green-bg:#e8f5ee;--green-border:#b6ddc8;
+  --amber:#92540a;--amber-bg:#fef3c7;--amber-border:#f5cc6e;
+  --red:#b91c1c;--red-bg:#fee2e2;--red-border:#fca5a5;
+  --blue:#1b4fba;--blue-bg:#eff4ff;--blue-border:#b3c8f7;
+  --r:10px;--shadow:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.05);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;background:var(--bg);color:var(--ink);min-height:100vh}
+.nav{display:flex;align-items:center;background:var(--surface);border-bottom:1px solid var(--border);padding:0 20px;height:52px;position:sticky;top:0;z-index:100;box-shadow:var(--shadow)}
+.nav-back{display:flex;align-items:center;gap:4px;font-size:13px;font-weight:500;color:var(--ink3);text-decoration:none;margin-right:14px;padding:4px 8px;border-radius:6px}
+.nav-back:hover{color:var(--green);background:var(--bg)}
+.nav-logo{font-weight:700;font-size:15px;color:var(--green);display:flex;align-items:center;gap:6px}
+.nav-right{margin-left:auto}
+.date-chip{font-size:12px;color:var(--ink3);background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:4px 12px}
+main{max-width:1100px;margin:0 auto;padding:24px 18px 80px}
+h2{font-size:15px;font-weight:700;margin:28px 2px 4px}
+.sub{font-size:12px;color:var(--ink3);margin:0 2px 12px}
+.note{font-size:11px;color:var(--ink3);background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--amber-border);border-radius:8px;padding:10px 14px;margin:10px 0}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+@media(max-width:820px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;box-shadow:var(--shadow)}
+.kpi .n{font-size:20px;font-weight:800;line-height:1.1;letter-spacing:-.3px}
+.kpi .l{font-size:10px;color:var(--ink3);margin-top:5px;text-transform:uppercase;letter-spacing:.4px}
+.kpi .s{font-size:11px;color:var(--ink2);margin-top:3px}
+.kpi.bad .n{color:var(--red)} .kpi.warn .n{color:var(--amber)} .kpi.ok .n{color:var(--green)}
+.fresh{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.chip{font-size:11px;padding:3px 10px;border-radius:20px;border:1px solid var(--green-border);background:var(--green-bg);color:var(--green)}
+.chip.stale{border-color:var(--red-border);background:var(--red-bg);color:var(--red);font-weight:700}
+.alerts{display:flex;flex-direction:column;gap:6px;margin-bottom:6px}
+.al{font-size:13px;padding:9px 14px;border-radius:8px;border:1px solid var(--amber-border);background:var(--amber-bg);color:var(--amber)}
+.al.red{border-color:var(--red-border);background:var(--red-bg);color:var(--red)}
+.al a{color:inherit;font-weight:700}
+.wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--bg);color:var(--ink2);text-align:left;padding:9px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;font-weight:700;white-space:nowrap;border-bottom:1px solid var(--border)}
+th.num,td.num{text-align:right;font-variant-numeric:tabular-nums}
+td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+tr.tot td{font-weight:700;background:var(--bg)}
+.muted{color:var(--ink3)}
+.red{color:var(--red)} .amber{color:var(--amber)} .green{color:var(--green)}
+/* stacked bars */
+.bars{display:grid;gap:10px;padding:14px}
+.barrow{display:grid;grid-template-columns:70px 1fr 110px;gap:10px;align-items:center}
+.bar{display:flex;height:26px;border-radius:6px;overflow:hidden;background:var(--bg);cursor:pointer}
+.seg{height:100%;min-width:0}
+.legend{display:flex;gap:12px;flex-wrap:wrap;padding:0 14px 12px;font-size:11px;color:var(--ink2)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.c-supplier{background:#1a6b41}.c-payroll{background:#3b82c4}.c-operating{background:#9aa5b1}.c-loan{background:#b08a3e}.c-owner{background:#b91c1c}.c-reversal{background:#7c5cbf}.c-unclassified{background:#f59e0b}
+.btn{font-size:11px;font-weight:600;border:1px solid var(--green-border);background:var(--green-bg);color:var(--green);padding:4px 10px;border-radius:6px;cursor:pointer}
+.btn.red{border-color:var(--red-border);background:var(--red-bg);color:var(--red)}
+.btn.ghost{border-color:var(--border-strong);background:var(--surface);color:var(--ink2)}
+select,input[type=text]{font-size:12px;padding:5px 8px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);color:var(--ink)}
+.cat{display:inline-block;font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;background:var(--bg);border:1px solid var(--border)}
+.cat-D{background:var(--red-bg);border-color:var(--red-border);color:var(--red)} .cat-C{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber)} .cat-B{background:var(--blue-bg);border-color:var(--blue-border);color:var(--blue)} .cat-A{background:var(--green-bg);border-color:var(--green-border);color:var(--green)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:820px){.two{grid-template-columns:1fr}}
+#drill{display:none;margin-top:12px}
+</style>
+</head>
+<body>
+{% macro inr(x) -%}{% if x is none %}—{% else %}₹{{ '{:,.0f}'.format(x) }}{% endif %}{%- endmacro %}
+{% macro pct(x) -%}{% if x is none %}—{% else %}{{ '{:.0%}'.format(x) }}{% endif %}{%- endmacro %}
+
+<div class="nav">
+  <a href="/dashboard/" class="nav-back">← Dashboard</a>
+  <span class="nav-logo">📊 {{ plant_name }} Analytics</span>
+  <div class="nav-right"><span class="date-chip">{{ current_time }}</span></div>
+</div>
+
+<main>
+  {% include "_analytics_subnav.html" %}
+
+  <!-- ══ 7. ALERTS ══ -->
+  {% if m.alerts %}
+  <div class="alerts">
+    {% for a in m.alerts %}
+    <div class="al {{ a.sev }}">{{ a.text }}{% if a.link %} · <a href="{{ a.link }}">open</a>{% endif %}</div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="al" style="background:var(--green-bg);border-color:var(--green-border);color:var(--green)">No alerts right now.</div>
+  {% endif %}
+
+  <!-- ══ 1. POSITION ══ -->
+  <h2>Today's position</h2>
+  {% set p = m.pos %}
+  <div class="kpis">
+    <div class="kpi {{ 'bad' if p.cover_days is not none and p.cover_days < 3 else 'ok' }}">
+      <div class="n">{{ inr(p.balance) }}</div><div class="l">Bank balance</div>
+      <div class="s">{% if p.cover_days is not none %}{{ '{:.1f}'.format(p.cover_days) }} days of outflows{% endif %}{% if p.balance_date %} · as of {{ p.balance_date.strftime('%d %b') }}{% endif %}</div>
+    </div>
+    <div class="kpi {{ 'bad' if p.reserve_gap and p.reserve_gap > 0 else 'ok' }}">
+      <div class="n">{{ inr(p.reserve_gap if p.reserve_gap and p.reserve_gap > 0 else 0) }}</div><div class="l">Gap to 1-week reserve</div>
+      <div class="s">1 week of outflows ≈ {{ inr(p.week_outflow) }}</div>
+    </div>
+    <div class="kpi">
+      <div class="n">{{ inr(p.recv) }}</div><div class="l">Receivables (ledger)</div>
+      <div class="s">{{ pct(p.over30_pct) }} older than 30 days (modelled)</div>
+    </div>
+    <div class="kpi warn">
+      <div class="n">{{ inr(p.supplier_net) }}</div><div class="l">Supplier net payable</div>
+      <div class="s">bills − payments (Vasy "due": {{ inr(m.supp.vasy_due) }})</div>
+    </div>
+    <div class="kpi {{ 'bad' if m.fresh|selectattr('stale')|list|length else 'ok' }}">
+      <div class="n">{{ m.fresh|selectattr('stale')|list|length }} stale</div><div class="l">Data freshness</div>
+      <div class="s">feeds older than 2 days</div>
+    </div>
+  </div>
+  <div class="fresh">
+    {% for f in m.fresh %}<span class="chip {{ 'stale' if f.stale else '' }}">{{ f.label }}: {{ f.last.strftime('%d %b') if f.last else 'never' }}</span>{% endfor %}
+    {% for g in m.gaps %}<span class="chip stale">No bank data: {{ g }}</span>{% endfor %}
+  </div>
+
+  <!-- ══ 2. WHERE THE MONEY WENT ══ -->
+  <h2>Where the money went</h2>
+  <div class="sub">Bank outflows by class, last 4 months. Click a bar to see the payments. Classes come only from your own tags in Bank recon — nothing is guessed.</div>
+  <div class="wrap">
+    <div class="bars">
+    {% for mo in m.flows.months %}
+      <div class="barrow">
+        <b>{{ mo.month }}</b>
+        <div class="bar" title="click for detail">
+          {% for c in m.flows.classes %}{% set v = mo.classes[c] %}{% if v > 0 and mo.total > 0 %}
+          <div class="seg c-{{ c }}" style="width:{{ '%.2f'|format(v / mo.total * 100) }}%" onclick="drill('{{ mo.month }}','{{ c }}')" title="{{ m.flows.labels[c] }}: {{ inr(v) }}"></div>{% endif %}{% endfor %}
+        </div>
+        <div class="num" style="text-align:right"><b>{{ inr(mo.total) }}</b>{% if mo.rows == 0 %}<div class="red" style="font-size:11px">no bank data</div>{% endif %}</div>
+      </div>
+    {% endfor %}
+    </div>
+    <div class="legend">{% for c in m.flows.classes %}<span><i class="c-{{ c }}"></i>{{ m.flows.labels[c] }}</span>{% endfor %}</div>
+    <div class="scroll"><table>
+      <thead><tr><th>Month</th>{% for c in m.flows.classes %}<th class="num">{{ m.flows.labels[c].split(' (')[0].split(' /')[0] }}</th>{% endfor %}<th class="num">Total out</th><th class="num">Owner %</th><th class="num">Unclassified %</th><th class="num">Bank in</th></tr></thead>
+      <tbody>
+      {% for mo in m.flows.months %}
+        <tr><td>{{ mo.month }}</td>
+        {% for c in m.flows.classes %}<td class="num {{ 'red' if c=='owner' and mo.classes[c] > 0 else '' }}">{{ inr(mo.classes[c]) }}</td>{% endfor %}
+        <td class="num"><b>{{ inr(mo.total) }}</b></td><td class="num {{ 'red' if mo.owner_pct > 0.05 else '' }}">{{ pct(mo.owner_pct) }}</td><td class="num {{ 'amber' if mo.unclass_pct > 0.1 else '' }}">{{ pct(mo.unclass_pct) }}</td><td class="num">{{ inr(mo.inflow) }}</td></tr>
+      {% endfor %}
+      </tbody></table></div>
+  </div>
+  <div id="drill" class="wrap"><div class="scroll"><table><thead><tr><th>Date</th><th class="num">Amount</th><th>Counterparty</th><th>Narration</th><th>Tag</th></tr></thead><tbody id="drillBody"></tbody></table></div></div>
+
+  <h2 id="unclassified">Untagged payments (last 45 days)</h2>
+  <div class="sub">Tag each once. Tick "remember" only for a payee that always means the same thing (not a person you pay for different reasons).</div>
+  {% if m.unclass %}
+  <div class="wrap"><div class="scroll"><table>
+    <thead><tr><th>Date</th><th class="num">Amount</th><th>Payee / narration</th><th>Category</th><th>Remark</th><th>Remember</th><th></th></tr></thead>
+    <tbody>
+    {% for u in m.unclass %}
+      <tr id="u{{ u.id }}"><td>{{ u.date.strftime('%d %b') }}</td><td class="num"><b>{{ inr(u.amount) }}</b></td>
+        <td>{{ u.counterparty or '—' }}<div class="muted" style="font-size:11px">{{ u.desc }}</div></td>
+        <td><select id="cat{{ u.id }}"><option value="">— choose —</option>{% for k,label,g in categories %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></td>
+        <td><input type="text" id="rem{{ u.id }}" placeholder="what was this for?" style="width:170px"></td>
+        <td><input type="checkbox" id="al{{ u.id }}"></td>
+        <td><button class="btn" onclick="tagTxn({{ u.id }})">Save</button></td></tr>
+    {% endfor %}
+    </tbody></table></div></div>
+  {% else %}<div class="note" style="border-left-color:var(--green-border)">Nothing untagged in the last 45 days.</div>{% endif %}
+
+  <!-- ══ 3. CASH BRIDGE ══ -->
+  <h2>Cash bridge — why sales and cash differ</h2>
+  <div class="sub">Sales invoiced → collected → credit given; purchases → paid → supplier credit. The current month is partial.</div>
+  <div class="wrap"><div class="scroll"><table>
+    <thead><tr><th>Month</th><th class="num">Sales</th><th class="num">Collected</th><th class="num">Collected %</th><th class="num">Customer credit added</th><th class="num">Purchases</th><th class="num">Paid to suppliers</th><th class="num">Supplier credit added</th></tr></thead>
+    <tbody>{% for b in m.bridge %}<tr><td>{{ b.month }}{% if b.partial %} <span class="muted">(so far)</span>{% endif %}</td>
+      <td class="num">{{ inr(b.sales) }}</td><td class="num">{{ inr(b.collected) }}</td><td class="num">{{ pct(b.coll_pct) }}</td>
+      <td class="num {{ 'red' if b.customer_credit > 0 else '' }}"><b>{{ inr(b.customer_credit) }}</b></td>
+      <td class="num">{{ inr(b.purchases) }}</td><td class="num">{{ inr(b.paid) }}</td><td class="num">{{ inr(b.supplier_credit) }}</td></tr>{% endfor %}</tbody></table></div></div>
+
+  <!-- ══ 4. CUSTOMERS ══ -->
+  <h2>Customers — who owes, who is dangerous</h2>
+  {% set c = m.cust %}
+  {% if not c.has_data %}<div class="note">No ledger snapshot yet — import Customer Outstanding.</div>{% else %}
+  <div class="sub">Ledger snapshot of {{ c.snap_date.strftime('%d %b %Y') }}. Ageing is a FIFO estimate (oldest invoices assumed paid first). Category: A retain · B reduced limit · C advance/COD · D credit hold · F dormant.</div>
+  <div class="two">
+    <div class="wrap"><div class="scroll"><table>
+      <thead><tr><th>Category</th><th class="num">Customers</th><th class="num">Sales (30d)</th><th class="num">Owed</th><th class="num">Older than 30d</th></tr></thead>
+      <tbody>{% for k in ['A','B','C','D','F'] %}{% set x = c.cats[k] %}<tr><td><span class="cat cat-{{ k }}">{{ k }}</span></td><td class="num">{{ x.n }}</td><td class="num">{{ inr(x.sales30) }}</td><td class="num">{{ inr(x.bal) }}</td><td class="num">{{ inr(x.over30) }}</td></tr>{% endfor %}
+      <tr class="tot"><td>Total</td><td class="num"></td><td class="num"></td><td class="num">{{ inr(c.gross) }}</td><td class="num">{{ inr(c.over30) }} ({{ pct(c.over30_pct) }})</td></tr></tbody></table></div></div>
+    <div class="wrap"><div class="scroll"><table>
+      <thead><tr><th>Age of balance</th><th class="num">Amount</th><th class="num">Share</th></tr></thead>
+      <tbody>{% for k,lab in [('0-30','0–30 days'),('31-60','31–60 days'),('61-90','61–90 days'),('90+','Over 90 days'),('pre_fy','Before this financial year')] %}<tr><td>{{ lab }}</td><td class="num">{{ inr(c.ages[k]) }}</td><td class="num">{{ pct(c.ages[k] / c.gross if c.gross else 0) }}</td></tr>{% endfor %}</tbody></table></div></div>
+  </div>
+
+  <div class="sub" style="margin-top:16px">Top 20 balances</div>
+  <div class="wrap"><div class="scroll"><table>
+    <thead><tr><th>Customer</th><th>Cat</th><th class="num">Owed</th><th class="num">Sales 30d</th><th class="num">Collected % (60d)</th><th class="num">Months of sales owed</th><th class="num">&gt;30d</th><th class="num">Last receipt</th><th class="num">{{ 14 }}-day change</th></tr></thead>
+    <tbody>{% for r in c.top %}<tr><td>{{ r.name }}</td><td><span class="cat cat-{{ r.cat }}">{{ r.cat }}</span></td><td class="num"><b>{{ inr(r.closing) }}</b></td><td class="num">{{ inr(r.sales30) }}</td><td class="num">{{ pct(r.coll) }}</td><td class="num">{{ '{:.1f}'.format(r.months) if r.months is not none else '—' }}</td><td class="num">{{ inr(r.over30) }}</td>
+      <td class="num">{{ (r.days_since_receipt ~ ' d ago') if r.days_since_receipt is not none else 'none' }}</td>
+      <td class="num {{ 'red' if r.trend and r.trend > 0 else ('green' if r.trend and r.trend < 0 else '') }}">{% if r.trend is none %}—{% else %}{{ '▲' if r.trend > 0 else '▼' }} {{ inr(r.trend|abs) }}{% endif %}</td></tr>{% endfor %}</tbody></table></div></div>
+
+  <div class="sub" style="margin-top:16px">Dormant balances (no billing for 60+ days): {{ c.dormant_n }} accounts, {{ inr(c.dormant_total) }}. Record your call — it is a note only and changes no balances.</div>
+  <div class="wrap"><div class="scroll"><table>
+    <thead><tr><th>Customer</th><th class="num">Owed</th><th class="num">Last receipt</th><th>Decision</th><th>Note</th><th></th></tr></thead>
+    <tbody>{% for r in c.dormant %}<tr><td>{{ r.name }}</td><td class="num"><b>{{ inr(r.closing) }}</b></td>
+      <td class="num">{{ r.last_receipt.strftime('%d %b %Y') if r.last_receipt else 'none on file' }}</td>
+      <td>{% if r.customer_id %}<select id="dd{{ r.customer_id }}"><option value="">— undecided —</option><option value="pursue" {{ 'selected' if r.decision and r.decision.decision=='pursue' else '' }}>Pursue</option><option value="provide" {{ 'selected' if r.decision and r.decision.decision=='provide' else '' }}>Provide (unlikely to recover)</option></select>{% else %}<span class="muted">not linked to a customer</span>{% endif %}</td>
+      <td>{% if r.customer_id %}<input type="text" id="dn{{ r.customer_id }}" value="{{ r.decision.note if r.decision and r.decision.note else '' }}" placeholder="note" style="width:190px">{% endif %}</td>
+      <td>{% if r.customer_id %}<button class="btn" onclick="decide({{ r.customer_id }})">Save</button>{% endif %}{% if r.decision %}<div class="muted" style="font-size:10px">{{ r.decision.decided_on.strftime('%d %b') }}</div>{% endif %}</td></tr>{% endfor %}</tbody></table></div></div>
+  {% endif %}
+
+  <!-- ══ SUPPLIERS ══ -->
+  <h2>Suppliers — what we owe</h2>
+  <div class="sub">Net = bills − payments recorded. Vasy never allocates payments to bills, so its own "overdue" total is not the real payable.</div>
+  <div class="wrap"><div class="scroll"><table>
+    <thead><tr><th>Supplier</th><th class="num">Bills (FY)</th><th class="num">Payments</th><th class="num">Net payable</th></tr></thead>
+    <tbody>{% for s in m.supp.rows[:8] %}<tr><td>{{ s.name }}</td><td class="num">{{ inr(s.bills) }}</td><td class="num">{{ inr(s.paid) }}</td><td class="num"><b>{{ inr(s.net) }}</b></td></tr>{% endfor %}
+    <tr class="tot"><td>Total</td><td></td><td></td><td class="num">{{ inr(m.supp.total) }}</td></tr></tbody></table></div></div>
+
+  <!-- ══ 5. LEAKAGE ══ -->
+  <h2>Leakage watch</h2>
+  <div class="sub">Alert levels: raw material above 72% of sales, dead birds above 4% of live kg. Current month is partial.</div>
+  <div class="wrap"><div class="scroll"><table>
+    <thead><tr><th>Month</th><th class="num">Raw material % of sales</th><th class="num">Live birds bought (kg)</th><th class="num">Dead birds (kg)</th><th class="num">Dead %</th><th class="num">Dead birds ≈ ₹ (paid, sold at nil)</th><th class="num">Plant wastage (kg)</th></tr></thead>
+    <tbody>{% for t in m.leak.trend %}<tr><td>{{ t.month }}{% if t.partial %} <span class="muted">(so far)</span>{% endif %}</td>
+      <td class="num {{ 'red' if t.raw_share and t.raw_share > 0.72 else '' }}">{{ pct(t.raw_share) }}</td>
+      <td class="num">{{ '{:,.0f}'.format(t.live_kg) }}</td><td class="num">{{ '{:,.0f}'.format(t.dead_kg) }}</td>
+      <td class="num {{ 'red' if t.dead_pct and t.dead_pct > 0.04 else '' }}">{{ ('{:.1%}'.format(t.dead_pct)) if t.dead_pct is not none else '—' }}</td>
+      <td class="num">{{ inr(t.dead_value) }}</td><td class="num">{{ '{:,.0f}'.format(t.waste_kg) }}</td></tr>{% endfor %}</tbody></table></div></div>
+  <div class="two" style="margin-top:14px">
+    <div>
+      <div class="sub">Items issued to "Plant Wastage" at nil value, valued at selling price (6 months)</div>
+      <div class="wrap"><div class="scroll"><table><thead><tr><th>Item</th><th class="num">Kg</th><th class="num">Value</th></tr></thead>
+      <tbody>{% for w in m.leak.waste_rows %}<tr><td>{{ w[0] }}</td><td class="num">{{ '{:,.0f}'.format(w[1]) }}</td><td class="num">{{ inr(w[2]) }}</td></tr>{% else %}<tr><td colspan="3" class="muted">None</td></tr>{% endfor %}</tbody></table></div></div>
+    </div>
+    <div>
+      <div class="sub">Realised price per kg — last month vs this month, and the cheapest buyers (last 30 days, ≥20 kg)</div>
+      <div class="wrap"><div class="scroll"><table><thead><tr><th>Product</th><th class="num">Prev</th><th class="num">Now</th><th>Lowest-priced buyers</th></tr></thead>
+      <tbody>{% for r in m.leak.price_rows %}<tr><td>{{ r.product }}</td><td class="num">{{ '{:,.0f}'.format(r.prev) if r.prev else '—' }}</td><td class="num">{{ '{:,.0f}'.format(r.cur) if r.cur else '—' }}</td>
+        <td style="font-size:12px">{% for l in r.low %}{{ l[0] }} ₹{{ '{:,.0f}'.format(l[1]) }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td></tr>{% endfor %}</tbody></table></div></div>
+    </div>
+  </div>
+
+  <!-- ══ 6. CONTROLS ══ -->
+  {% set k = m.ctl %}
+  <h2>Controls log — last {{ k.days }} days</h2>
+  <div class="sub">Every deletion, vanished invoice, post-billing edit and write-off. Aim for zero without a reason.</div>
+  <div class="kpis" style="grid-template-columns:repeat(4,1fr)">
+    <div class="kpi {{ 'warn' if k.dels else 'ok' }}"><div class="n">{{ k.dels|length }}</div><div class="l">Deleted ledger entries</div><div class="s">{{ inr(k.del_total) }}</div></div>
+    <div class="kpi {{ 'warn' if k.gone else 'ok' }}"><div class="n">{{ k.gone|length }}</div><div class="l">Invoices that vanished</div><div class="s">{{ inr(k.gone_total) }}</div></div>
+    <div class="kpi {{ 'warn' if k.n_edits else 'ok' }}"><div class="n">{{ k.n_edits }}</div><div class="l">Edits after billing</div><div class="s">net {{ inr(k.edit_impact) }} (latest 40)</div></div>
+    <div class="kpi {{ 'warn' if k.bad else 'ok' }}"><div class="n">{{ k.bad|length }}</div><div class="l">Write-offs</div><div class="s">{{ inr(k.bad_total) }}</div></div>
+  </div>
+  {% if k.dels or k.gone or k.edits %}
+  <div class="wrap" style="margin-top:12px"><div class="scroll"><table>
+    <thead><tr><th>When</th><th>What</th><th>Party</th><th class="num">Amount / impact</th></tr></thead>
+    <tbody>
+    {% for d in k.dels %}<tr><td>{{ d.deleted_at.strftime('%d %b %H:%M') }}</td><td class="red">Deleted {{ d.entity_type }} {{ d.entity_key }}</td><td>{{ d.party_name }}</td><td class="num">{{ inr(d.amount) }}</td></tr>{% endfor %}
+    {% for g in k.gone %}<tr><td>{{ g.disappeared_at.strftime('%d %b %H:%M') }}</td><td class="red">Invoice vanished {{ g.voucher_no }}</td><td>{{ g.party_name }}</td><td class="num">{{ inr(g.total) }}</td></tr>{% endfor %}
+    {% for e in k.edits %}<tr><td>{{ e.detected_at.strftime('%d %b %H:%M') }}</td><td class="amber">Edit {{ e.change_type }} · {{ e.voucher_no }} · {{ e.product_name or '' }}</td><td>{{ e.party_name or '' }}</td><td class="num">{{ inr(e.impact) }}</td></tr>{% endfor %}
+    </tbody></table></div></div>
+  {% endif %}
+  <div class="note">Alert threshold for a single non-supplier payment out of the bank: {{ inr(m.threshold) }} (change <code>ALERT_TRANSFER_THRESHOLD</code> in money_service.py).</div>
+</main>
+
+<script>
+function post(url, body){
+  return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(function(r){ if(!r.ok){ return r.json().then(function(j){ throw new Error(j.detail||'Failed'); }); } return r.json(); });
+}
+function tagTxn(id){
+  var cat=document.getElementById('cat'+id).value;
+  if(!cat){ alert('Choose a category first.'); return; }
+  post('/dashboard/analytics/bankrecon/categorize',{ids:[id],category:cat,remark:document.getElementById('rem'+id).value,save_alias:document.getElementById('al'+id).checked})
+    .then(function(){ var r=document.getElementById('u'+id); if(r) r.style.opacity='.35'; })
+    .catch(function(e){ alert(e.message); });
+}
+function decide(cid){
+  var d=document.getElementById('dd'+cid).value, n=document.getElementById('dn'+cid).value;
+  post('/dashboard/analytics/money/decision',{customer_id:cid,decision:d,note:n}).then(function(){ location.reload(); }).catch(function(e){ alert(e.message); });
+}
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function drill(month,klass){
+  fetch('/dashboard/analytics/money/drill?month='+month+'&klass='+klass).then(function(r){return r.json();}).then(function(j){
+    var b=document.getElementById('drillBody'); b.innerHTML='';
+    j.rows.forEach(function(r){
+      b.insertAdjacentHTML('beforeend','<tr><td>'+esc(r.date)+'</td><td class="num"><b>₹'+Math.round(r.amount).toLocaleString('en-IN')+'</b></td><td>'+esc(r.counterparty)+'</td><td>'+esc(r.desc)+'</td><td>'+esc(r.category||'')+(r.remark?' · '+esc(r.remark):'')+'</td></tr>');
+    });
+    if(!j.rows.length) b.innerHTML='<tr><td colspan="5" class="muted">No payments.</td></tr>';
+    var d=document.getElementById('drill'); d.style.display='block'; d.scrollIntoView({behavior:'smooth',block:'nearest'});
+  });
+}
+</script>
+</body>
+</html>
