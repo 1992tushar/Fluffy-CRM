@@ -164,34 +164,50 @@ def receivable_model(db: Session, today: date) -> dict:
     snaps = db.query(OutstandingSnapshot).filter(OutstandingSnapshot.snapshot_date == snap_date).all()
     prev_date = db.query(func.max(OutstandingSnapshot.snapshot_date)).filter(
         OutstandingSnapshot.snapshot_date <= snap_date - timedelta(days=GROW_DAYS)).scalar()
+
+    # Identity = the CRM customer id when the row is linked, else the normalised
+    # name. Vasy invoices are often billed under a short name ("Baba") while the
+    # ledger carries the full one ("Baba Chinese"); name matching wrongly made
+    # such regular hotels look dormant. customer_id is set on all ledger rows.
+    def ident(cid, key):
+        return f"c{cid}" if cid else f"k{key}"
+
     prev = {}
     if prev_date:
-        prev = {s.party_key: _f(s.closing) for s in db.query(OutstandingSnapshot).filter(
+        prev = {ident(s.customer_id, s.party_key): _f(s.closing) for s in db.query(OutstandingSnapshot).filter(
             OutstandingSnapshot.snapshot_date == prev_date)}
 
     invs: dict[str, list] = defaultdict(list)
-    for key, d, tot in db.query(VasyInvoice.party_key, VasyInvoice.invoice_date, VasyInvoice.total).filter(
+    for key, cid, d, tot in db.query(VasyInvoice.party_key, VasyInvoice.customer_id, VasyInvoice.invoice_date,
+                                     VasyInvoice.total).filter(
             VasyInvoice.invoice_date.isnot(None)).order_by(VasyInvoice.invoice_date.desc()):
-        invs[key].append((d, _f(tot)))
+        invs[ident(cid, key)].append((d, _f(tot)))
 
     d60 = today - timedelta(days=60)
+    recent_parties: dict[str, list] = {}      # normalised name -> [display name, customer_id, invoices, last date]
     sales60: dict[str, float] = defaultdict(float)
     sales30: dict[str, float] = defaultdict(float)
-    for key, d, tot in db.query(VasyInvoice.party_key, VasyInvoice.invoice_date, VasyInvoice.total).filter(
-            VasyInvoice.invoice_date >= d60):
-        sales60[key] += _f(tot)
+    names_by_key = {k: n for k, n in db.query(VasyInvoice.party_key, VasyInvoice.party_name).filter(
+        VasyInvoice.invoice_date >= d60).distinct()}
+    for key, cid, d, tot in db.query(VasyInvoice.party_key, VasyInvoice.customer_id, VasyInvoice.invoice_date,
+                                     VasyInvoice.total).filter(VasyInvoice.invoice_date >= d60):
+        i = ident(cid, key)
+        rp = recent_parties.setdefault(key, [None, cid, 0, d])
+        rp[2] += 1
+        rp[3] = max(rp[3], d)
+        sales60[i] += _f(tot)
         if d >= today - timedelta(days=30):
-            sales30[key] += _f(tot)
+            sales30[i] += _f(tot)
     rec60: dict[str, float] = defaultdict(float)
     last_rec: dict[str, date] = {}
-    for key_name, cid, d, amt in db.query(CustomerReceipt.party_name, CustomerReceipt.customer_id,
-                                          CustomerReceipt.receipt_date, CustomerReceipt.amount).filter(
+    for name, cid, d, amt in db.query(CustomerReceipt.party_name, CustomerReceipt.customer_id,
+                                      CustomerReceipt.receipt_date, CustomerReceipt.amount).filter(
             CustomerReceipt.receipt_date.isnot(None)):
-        k = normalize_name(key_name)
+        i = ident(cid, normalize_name(name))
         if d >= d60:
-            rec60[k] += _f(amt)
-        if k not in last_rec or d > last_rec[k]:
-            last_rec[k] = d
+            rec60[i] += _f(amt)
+        if i not in last_rec or d > last_rec[i]:
+            last_rec[i] = d
 
     bad = {c for (c,) in db.query(BadDebt.customer_id)}
     # table is created at app start; tolerate a DB that has not been migrated yet
@@ -201,6 +217,16 @@ def receivable_model(db: Session, today: date) -> dict:
 
     rows = []
     for s in snaps:
+        # linked id first; also the by-name identity for rows that were never linked
+        ids = [ident(s.customer_id, s.party_key)]
+        if s.customer_id:
+            ids.append(ident(None, s.party_key))
+        s_inv = sorted((x for i in ids for x in invs.get(i, [])), key=lambda x: x[0], reverse=True)
+        s_sales60 = sum(sales60.get(i, 0.0) for i in ids)
+        s_sales30 = sum(sales30.get(i, 0.0) for i in ids)
+        s_rec60 = sum(rec60.get(i, 0.0) for i in ids)
+        s_last = max((last_rec[i] for i in ids if i in last_rec), default=None)
+        sid = ids[0]
         closing = _f(s.closing)
         age = {"0-30": 0.0, "31-60": 0.0, "61-90": 0.0, "90+": 0.0, "pre_fy": 0.0}
         if closing > 0:
@@ -208,7 +234,7 @@ def receivable_model(db: Session, today: date) -> dict:
             pre = min(max(opening - _f(s.credit), 0.0), closing) if opening > 0 else 0.0
             age["pre_fy"] = pre
             rem = closing - pre
-            for d, tot in invs.get(s.party_key, []):
+            for d, tot in s_inv:
                 if rem <= 0.005:
                     break
                 take = min(tot, rem)
@@ -219,23 +245,33 @@ def receivable_model(db: Session, today: date) -> dict:
             age["90+"] += max(rem, 0.0)           # older than the invoices we hold
         over30 = age["31-60"] + age["61-90"] + age["90+"] + age["pre_fy"]
         old60 = age["61-90"] + age["90+"] + age["pre_fy"]
-        monthly = sales60.get(s.party_key, 0.0) / 2.0
-        coll = (rec60.get(s.party_key, 0.0) / sales60[s.party_key]) if sales60.get(s.party_key) else None
+        monthly = s_sales60 / 2.0
+        coll = (s_rec60 / s_sales60) if s_sales60 else None
         months = (closing / monthly) if monthly > 0 else None
         cat = _category(closing, monthly, coll, months, old60)
-        p = prev.get(s.party_key)
+        p = prev.get(sid)
         rows.append({
             "customer_id": s.customer_id, "name": s.party_name, "key": s.party_key,
             "closing": closing, "age": age, "over30": over30, "old60": old60,
-            "sales30": sales30.get(s.party_key, 0.0), "monthly": monthly, "coll": coll, "months": months,
-            "last_receipt": last_rec.get(s.party_key),
-            "days_since_receipt": (today - last_rec[s.party_key]).days if s.party_key in last_rec else None,
+            "sales30": s_sales30, "monthly": monthly, "coll": coll, "months": months,
+            "last_receipt": s_last,
+            "days_since_receipt": (today - s_last).days if s_last else None,
             "prev": p, "trend": (closing - p) if p is not None else None,
             "cat": cat, "reason": _reason(cat, closing, monthly, coll, months, old60),
             "written_off": s.customer_id in bad,
             "decision": decisions.get(s.customer_id),
-            "dormant": closing > 0 and sales60.get(s.party_key, 0.0) == 0,
+            "dormant": closing > 0 and s_sales60 == 0,
         })
+    for r in rows:
+        r["hint"] = None
+        if r["dormant"] and len(r["key"]) >= 6:
+            for k2, (_, cid2, n2, last2) in recent_parties.items():
+                if cid2 == r["customer_id"] or len(k2) < 5 or k2 == r["key"]:
+                    continue
+                if k2 in r["key"] or r["key"] in k2:
+                    r["hint"] = (f"Possibly the same hotel as “{names_by_key.get(k2, k2)}” "
+                                 f"({n2} invoices in 60 days, last {last2:%d %b}) — merge them in Data health")
+                    break
     return {"has_data": True, "customers": rows, "snap_date": snap_date}
 
 
@@ -285,6 +321,9 @@ def customers_block(db: Session, today: date) -> dict:
     if not m["has_data"]:
         return {"has_data": False}
     rows = [r for r in m["customers"] if r["closing"] > 0 and not r["written_off"]]
+    for r in rows:
+        if r.get("hint"):
+            r["reason"] = r["reason"] + " · " + r["hint"]
     gross = sum(r["closing"] for r in rows)
     over30 = sum(r["over30"] for r in rows)
     cats = {}

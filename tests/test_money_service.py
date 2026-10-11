@@ -141,3 +141,28 @@ check(r["in_unconfirmed"] == 25000 and r["net_if_unconf"] == 15000, "promoter-na
 check(len(ms.txn_drilldown(db2, "2026-10", "owner_in_unconfirmed")) == 1, "unconfirmed drill shows 1 credit")
 check(any(x["category"] == "drawing" for x in ms.txn_drilldown(db2, "2026-10", "owner")), "owner drill includes cash drawing")
 print("OWNER FLOW PASSED")
+
+# ---- regular hotel billed under a short name but linked by customer_id is NOT dormant
+c2 = Customer(restaurant_name="Baba Chinese", phone_number="9000000002")
+db2.add(c2); db2.commit()
+db2.add(OutstandingSnapshot(customer_id=c2.id, party_name="Baba Chinese", party_key="BABACHINESE", opening_balance=0,
+                            debit=0, credit=0, closing=80000, snapshot_date=TODAY))
+db2.add(VasyInvoice(voucher_no="INVB1", invoice_date=TODAY - timedelta(days=3), party_name="Baba", party_key="BABA",
+                    customer_id=c2.id, total=9000))
+db2.commit()
+cb2 = ms.customers_block(db2, TODAY)
+rb = [r for r in cb2["all"] if r["key"] == "BABACHINESE"][0]
+check(not rb["dormant"] and rb["cat"] != "F", "short-name invoices linked by customer_id -> not dormant")
+check(abs(rb["sales30"] - 9000) < 0.01, "linked invoice counted in last-30-day sales")
+print("LINKED-NAME PASSED")
+
+# ---- hint when a dormant ledger row looks like another, actively billed customer record
+c3 = Customer(restaurant_name="Sairat Ravet", phone_number="9000000003"); c4 = Customer(restaurant_name="Sairat Biryani", phone_number="9000000004")
+db2.add_all([c3, c4]); db2.commit()
+db2.add(OutstandingSnapshot(customer_id=c3.id, party_name="Sairat Biryani Ravet", party_key="SAIRATBIRYANIRAVET", opening_balance=0,
+                            debit=0, credit=0, closing=150000, snapshot_date=TODAY))
+db2.add(VasyInvoice(voucher_no="INVS1", invoice_date=TODAY - timedelta(days=2), party_name="Sairat Biryani", party_key="SAIRATBIRYANI",
+                    customer_id=c4.id, total=5000)); db2.commit()
+rs = [r for r in ms.customers_block(db2, TODAY)["all"] if r["key"] == "SAIRATBIRYANIRAVET"][0]
+check(rs["dormant"] and rs["hint"] and "Sairat Biryani" in rs["hint"], "dormant row gets a 'possibly same hotel' hint")
+print("HINT PASSED")

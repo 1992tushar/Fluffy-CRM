@@ -245,7 +245,7 @@ select,input[type=text]{font-size:12px;padding:5px 8px;border:1px solid var(--bo
   <div class="sub" style="margin-top:16px">Dormant balances (no billing for 60+ days): {{ c.dormant_n }} accounts, {{ inr(c.dormant_total) }}. Record your call — it is a note only and changes no balances.</div>
   <div class="wrap"><div class="scroll"><table>
     <thead><tr><th>Customer</th><th class="num">Owed</th><th class="num">Last receipt</th><th>Decision</th><th>Note</th><th></th></tr></thead>
-    <tbody>{% for r in c.dormant %}<tr><td>{{ r.name }}</td><td class="num"><b>{{ inr(r.closing) }}</b></td>
+    <tbody>{% for r in c.dormant %}<tr><td>{{ r.name }}{% if r.hint %}<div style="font-size:11px;color:var(--amber)">{{ r.hint }} · <a href="/dashboard/analytics/data-health">Data health</a></div>{% endif %}</td><td class="num"><b>{{ inr(r.closing) }}</b></td>
       <td class="num">{{ r.last_receipt.strftime('%d %b %Y') if r.last_receipt else 'none on file' }}</td>
       <td>{% if r.customer_id %}<select id="dd{{ r.customer_id }}"><option value="">— undecided —</option><option value="pursue" {{ 'selected' if r.decision and r.decision.decision=='pursue' else '' }}>Pursue</option><option value="provide" {{ 'selected' if r.decision and r.decision.decision=='provide' else '' }}>Provide (unlikely to recover)</option></select>{% else %}<span class="muted">not linked to a customer</span>{% endif %}</td>
       <td>{% if r.customer_id %}<input type="text" id="dn{{ r.customer_id }}" value="{{ r.decision.note if r.decision and r.decision.note else '' }}" placeholder="note" style="width:190px">{% endif %}</td>
