@@ -56,7 +56,7 @@ tr.tot td{font-weight:700;background:var(--bg)}
 .seg{height:100%;min-width:0}
 .legend{display:flex;gap:12px;flex-wrap:wrap;padding:0 14px 12px;font-size:11px;color:var(--ink2)}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
-.c-supplier{background:#1a6b41}.c-payroll{background:#3b82c4}.c-operating{background:#9aa5b1}.c-loan{background:#b08a3e}.c-owner{background:#b91c1c}.c-reversal{background:#7c5cbf}.c-unclassified{background:#f59e0b}
+.c-supplier{background:#1a6b41}.c-payroll{background:#3b82c4}.c-operating{background:#9aa5b1}.c-loan{background:#b08a3e}.c-invest{background:#0e7490}.c-owner{background:#b91c1c}.c-reversal{background:#7c5cbf}.c-unclassified{background:#f59e0b}
 .btn{font-size:11px;font-weight:600;border:1px solid var(--green-border);background:var(--green-bg);color:var(--green);padding:4px 10px;border-radius:6px;cursor:pointer}
 .btn.red{border-color:var(--red-border);background:var(--red-bg);color:var(--red)}
 .btn.ghost{border-color:var(--border-strong);background:var(--surface);color:var(--ink2)}
@@ -155,6 +155,14 @@ select,input[type=text]{font-size:12px;padding:5px 8px;border:1px solid var(--bo
       <td class="num {{ 'red' if r.net > 0 else 'green' }}"><b>{{ lnk(r.month,'owner_net','Net: taken out and put in',r.net) }}</b></td></tr>{% endfor %}
     <tr class="tot"><td>Total</td><td colspan="4"></td><td class="num">{{ inr(o.total_out) }}</td><td></td><td class="num">{{ inr(o.total_in) }}</td><td class="num">{{ inr(o.total_unconf) }}</td><td class="num">{{ inr(o.net) }}</td></tr>
     </tbody></table></div></div>
+  <h3 style="font-size:13px;margin:18px 2px 6px">Business funding — PPC Fluffy and Umabai (for the business, not owner money)</h3>
+  <div class="wrap"><div class="scroll"><table>
+    <thead><tr><th>Month</th><th class="num">Sent out of Fluffy</th><th class="num">Received into Fluffy</th><th class="num">Net sent out</th></tr></thead>
+    <tbody>{% for r in o.rows %}<tr><td>{{ r.month }}</td>
+      <td class="num">{{ lnk(r.month,'biz_out','Business funding sent (PPC / Umabai)',r.biz_out) }}</td>
+      <td class="num green">{{ lnk(r.month,'biz_in','Business funding received (PPC / Umabai)',r.biz_in) }}</td>
+      <td class="num"><b>{{ inr(r.biz_out - r.biz_in) }}</b></td></tr>{% endfor %}
+    <tr class="tot"><td>Total</td><td class="num">{{ inr(o.biz_out) }}</td><td class="num">{{ inr(o.biz_in) }}</td><td class="num">{{ inr(o.biz_net) }}</td></tr></tbody></table></div></div>
   <div id="dOwner" class="wrap" style="display:none;margin-top:12px"><div class="drillhead"><b id="dOwnerTitle"></b><span id="dOwnerSum" class="muted"></span><button class="btn ghost" onclick="document.getElementById('dOwner').style.display='none'">Close</button></div><div class="scroll"><table><thead><tr><th>Date</th><th>Out/In</th><th class="num">Amount</th><th>Counterparty</th><th>Narration</th><th>Tag / remark</th><th>Source</th></tr></thead><tbody id="dOwnerBody"></tbody></table></div></div>
   <div class="note">A month with "no bank data" shows ₹0 out only because no statement was uploaded — it is not a month with no drawings. Untagged payments do not count as OUT until you tag them below: {{ inr(o.untagged_out) }} is untagged in this window and some of it may be owner money. Money you put in also needs a tag — see "Untagged credits" below ({{ m.unclass_in|length }} waiting).</div>
 

@@ -216,3 +216,20 @@ check(abs(sum(x["amount"] for x in nt if x["dir"] == "out") - sum(x["amount"] fo
 inn = ms.txn_drilldown(db2, "2026-10", "owner_in")
 check(abs(sum(x["amount"] for x in inn) - rr["in_confirmed"]) < 0.01, "put-in drill adds up to the put-in cell")
 print("DRILL PASSED")
+
+# ---- PPC Fluffy / Umabai = business funding: not owner out, not owner in; rent to Umabai stays rent
+txn(db2, date(2026, 10, 9), 500000, "dr", "internal_transfer", cp="ppc fluffy")       # tagged as internal transfer
+txn(db2, date(2026, 10, 9), 200000, "dr", None, cp="", desc="NEFT PPC FLUFFY IDBI")    # untagged, narration only
+txn(db2, date(2026, 10, 9), 230000, "cr", None, cp="", desc="RTGS SARSENAPATI UMABAI DABHADE")
+txn(db2, date(2026, 10, 9), 15000, "dr", "rent", cp="", desc="CLG TO AC SARSENAPATI UMABAI JANATA")
+db2.commit()
+of3 = ms.owner_flows(db2, TODAY, months=2)
+r3 = [x for x in of3["rows"] if x["month"] == "2026-10"][0]
+check(r3["biz_out"] == 700000 and r3["biz_in"] == 230000, "PPC (tagged + untagged) = 7L out; Umabai credit = 2.3L in")
+check(r3["transfers"] == 40000 and r3["out"] == 50000 and r3["in_confirmed"] == 10000, "owner out/in unchanged: PPC/Umabai not counted as owner money")
+check(ms.classify_txn(type("X", (), dict(direction="dr", category="rent", description="UMABAI rent", counterparty_raw=""))()) == "operating", "tagged rent to Umabai stays operating")
+check(ms.classify_txn(type("X", (), dict(direction="dr", category=None, description="CLG TO AC SARSENAPATI UMABAI", counterparty_raw=""))()) == "unclassified", "untagged payment OUT to Umabai is not auto-called funding (it is rent)")
+check(not any(x["amount"] == 230000 for x in ms.unclassified_credits(db2, TODAY)), "Umabai credit not in untagged-credit list")
+check(sum(x["amount"] for x in ms.txn_drilldown(db2, "2026-10", "biz_out")) == 700000, "biz_out drill adds up")
+check(sum(x["amount"] for x in ms.txn_drilldown(db2, "2026-10", "owner_transfers")) == r3["transfers"], "owner transfers drill excludes PPC")
+print("BIZ FUNDING PASSED")

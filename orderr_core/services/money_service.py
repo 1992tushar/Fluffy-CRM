@@ -56,13 +56,38 @@ GROW_DAYS = 14                         # customer balance growing with no paymen
 # surname must never be used here.
 OWNER_NAME_TOKENS = ("TUSHAR TANAJI", "TUSHAR THOPTE")
 
+# Business funding / group investment: money to or from entities that exist FOR
+# THE BUSINESS (owner-confirmed 2026-10-11) - PPC Fluffy (group company) and
+# Umabai Dabhade (funding / plant landlord). It is not owner drawings and not
+# owner money put in, so it is its own class. Rent paid to Umabai keeps its
+# 'rent' tag (only untagged / internal-transfer / other rows are matched).
+# Umabai is also the plant landlord (monthly rent cheque), so only money coming IN from
+# Umabai is funding; payments out to Umabai are left to your tags (rent).
+BIZ_OUT_TOKENS = ("PPCFLUFFY",)
+BIZ_IN_TOKENS = ("PPCFLUFFY", "UMABAI")
+_BIZ_CATS = (None, "internal_transfer", "other")
+
+
+def biz_kind(t) -> Optional[str]:
+    """'biz_out' / 'biz_in' for money to / from the business-funding entities."""
+    if getattr(t, "category", None) not in _BIZ_CATS:
+        return None
+    text = ((getattr(t, "counterparty_raw", None) or "") + (getattr(t, "description", None) or "")).upper()
+    text = "".join(ch for ch in text if ch.isalnum())
+    toks = BIZ_OUT_TOKENS if t.direction == "dr" else BIZ_IN_TOKENS
+    if not any(tok in text for tok in toks):
+        return None
+    return "biz_out" if t.direction == "dr" else "biz_in"
+
+
 # ── bank categories → money class ───────────────────────────────────────────
-CLASSES = ["supplier", "payroll", "operating", "loan", "owner", "reversal", "unclassified"]
+CLASSES = ["supplier", "payroll", "operating", "loan", "invest", "owner", "reversal", "unclassified"]
 CLASS_LABEL = {
     "supplier": "Suppliers (birds, ice)",
     "payroll": "Payroll & staff",
     "operating": "Operating costs",
     "loan": "Loans / EMI",
+    "invest": "Business funding (PPC / Umabai)",
     "owner": "Owner / related / savings",
     "reversal": "Reversals / returned cheques",
     "unclassified": "Unclassified (tag me)",
@@ -90,6 +115,8 @@ def classify_txn(t) -> str:
     """Money class of one bank row. Debits only meaningful; credits → 'in'."""
     if t.direction == "cr":
         return "in"
+    if biz_kind(t) == "biz_out":
+        return "invest"
     cat = t.category
     if cat == "customer_payment":           # a debit tagged customer_payment = returned cheque / refund
         return "reversal"
@@ -429,6 +456,8 @@ def txn_drilldown(db: Session, month: str, klass: str, limit: int = 300) -> list
         for t in db.query(BankTransaction).filter(BankTransaction.value_date >= a, BankTransaction.value_date < b,
                                                   BankTransaction.direction == "dr",
                                                   BankTransaction.category.in_(want_out)):
+            if biz_kind(t):
+                continue
             out.append(_row(t, "out"))
     if klass in ("owner", "owner_net", "owner_drawings"):         # cash drawings belong to the same story
         for e in db.query(CashEntry).filter(CashEntry.entry_date >= a, CashEntry.entry_date < b, CashEntry.type == "drawing"):
@@ -440,6 +469,11 @@ def txn_drilldown(db: Session, month: str, klass: str, limit: int = 300) -> list
             kind = owner_in_kind(t)
             if kind == klass or (klass == "owner_net" and kind == "owner_in"):
                 out.append(_row(t, "in"))
+    if klass in ("biz_out", "biz_in"):
+        for t in db.query(BankTransaction).filter(BankTransaction.value_date >= a, BankTransaction.value_date < b,
+                                                  BankTransaction.direction == ("dr" if klass == "biz_out" else "cr")):
+            if biz_kind(t) == klass:
+                out.append(_row(t, "out" if klass == "biz_out" else "in"))
     if klass in CLASSES and klass != "owner":                      # plain class drill (bars, untagged amount)
         for t in db.query(BankTransaction).filter(BankTransaction.value_date >= a, BankTransaction.value_date < b,
                                                   BankTransaction.direction == "dr"):
@@ -456,6 +490,8 @@ def unclassified_credits(db: Session, today: date, days: int = 45, limit: int = 
     out = []
     for t in db.query(BankTransaction).filter(BankTransaction.value_date >= a, BankTransaction.direction == "cr",
                                               BankTransaction.category.is_(None)).order_by(BankTransaction.amount.desc()):
+        if biz_kind(t):
+            continue
         out.append({"id": t.id, "date": t.value_date, "amount": _f(t.amount), "desc": (t.description or "")[:80],
                     "counterparty": t.counterparty_raw or ""})
         if len(out) >= limit:
@@ -480,7 +516,7 @@ def unclassified_recent(db: Session, today: date, days: int = 45, limit: int = 4
 # 4b. Owner account — taken OUT of Fluffy vs put IN
 # ═══════════════════════════════════════════════════════════════════════════
 OWNER_IN_CLASSES = ("owner_in", "owner_in_unconfirmed")
-OWNER_DRILLS = ("owner", "owner_net", "owner_drawings", "owner_savings", "owner_transfers", "owner_cards", *OWNER_IN_CLASSES)
+OWNER_DRILLS = ("owner", "owner_net", "owner_drawings", "owner_savings", "owner_transfers", "owner_cards", "biz_out", "biz_in", *OWNER_IN_CLASSES)
 
 
 def _promoter_credit(t) -> bool:
@@ -493,7 +529,7 @@ def owner_in_kind(t) -> Optional[str]:
     owner_in             - tagged internal_transfer (you confirmed it is yours)
     owner_in_unconfirmed - owner-named payer booked as a customer payment
                            (could be customer cash collected by an individual)"""
-    if t.direction != "cr":
+    if t.direction != "cr" or biz_kind(t) == "biz_in":
         return None
     if t.category == "internal_transfer":
         return "owner_in"
@@ -508,7 +544,7 @@ def owner_flows(db: Session, today: date, months: int = 6) -> dict:
     separately and NOT netted until you confirm them."""
     start = _add_months(_month_start(today), -(months - 1))
     keys = [_month_key(_add_months(start, i)) for i in range(months)]
-    g = {k: {"savings": 0.0, "transfers": 0.0, "cards": 0.0, "drawings": 0.0, "in_confirmed": 0.0,
+    g = {k: {"biz_out": 0.0, "biz_in": 0.0, "savings": 0.0, "transfers": 0.0, "cards": 0.0, "drawings": 0.0, "in_confirmed": 0.0,
              "in_unconfirmed": 0.0, "bank_in": 0.0, "bank_out": 0.0, "rows": 0} for k in keys}
     untagged = 0.0
     for k in keys:
@@ -522,6 +558,11 @@ def owner_flows(db: Session, today: date, months: int = 6) -> dict:
         if t.direction == "dr" and classify_txn(t) == "unclassified":
             untagged += amt
             g[k]["untagged"] += amt
+        bk = biz_kind(t)
+        if bk:                                   # business funding: neither owner out nor owner in
+            g[k][bk] += amt
+            g[k]["bank_in" if bk == "biz_in" else "bank_out"] += amt
+            continue
         if t.direction == "cr":
             g[k]["bank_in"] += amt
             kind = owner_in_kind(t)
@@ -542,7 +583,7 @@ def owner_flows(db: Session, today: date, months: int = 6) -> dict:
         if k in g:
             g[k]["drawings"] += _f(e.amount)
     rows = []
-    tot = {"out": 0.0, "in": 0.0, "unconf": 0.0}
+    tot = {"out": 0.0, "in": 0.0, "unconf": 0.0, "biz_out": 0.0, "biz_in": 0.0}
     for k in keys:
         x = g[k]
         out = x["savings"] + x["transfers"] + x["cards"] + x["drawings"]
@@ -555,11 +596,13 @@ def owner_flows(db: Session, today: date, months: int = 6) -> dict:
                      "incomplete": x["rows"] >= 10 and x["bank_out"] > 0 and (x["untagged"] / x["bank_out"]) > INCOMPLETE_PCT,
                      "partial": k == _month_key(today)})
         tot["out"] += out; tot["in"] += x["in_confirmed"]; tot["unconf"] += x["in_unconfirmed"]
+        tot["biz_out"] += x["biz_out"]; tot["biz_in"] += x["biz_in"]
     months_with = [r for r in rows if not r["no_bank"] and not r["partial"] and not r["incomplete"]]
     avg = (sum(r["out"] for r in months_with) / len(months_with)) if months_with else 0.0
     return {"rows": rows, "total_out": tot["out"], "total_in": tot["in"], "total_unconf": tot["unconf"],
             "net": tot["out"] - tot["in"], "net_if_unconf": tot["out"] - tot["in"] - tot["unconf"],
             "avg_month_out": avg, "untagged_out": untagged,
+            "biz_out": tot["biz_out"], "biz_in": tot["biz_in"], "biz_net": tot["biz_out"] - tot["biz_in"],
             "incomplete_months": [r["month"] for r in rows if r["incomplete"]]}
 
 
@@ -743,7 +786,7 @@ def alerts(db: Session, today: date, cust: dict, pos: dict, leak: dict, fresh: l
     for t in db.query(BankTransaction).filter(BankTransaction.value_date >= a, BankTransaction.direction == "dr",
                                               BankTransaction.amount >= ALERT_TRANSFER_THRESHOLD):
         c = classify_txn(t)
-        if c in ("owner", "unclassified", "loan", "reversal"):
+        if c in ("owner", "unclassified", "loan", "reversal", "invest"):
             add("red" if c in ("owner", "unclassified") else "amber",
                 f"₹{_f(t.amount):,.0f} out on {t.value_date:%d %b} · {CLASS_LABEL[c]} · {(t.counterparty_raw or t.description or '')[:40]}",
                 "/dashboard/analytics/bankrecon")
