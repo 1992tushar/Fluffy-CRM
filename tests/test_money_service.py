@@ -118,7 +118,7 @@ from orderr_core.templating import make_templates  # noqa: E402
 from orderr_core.services import bank_categorize  # noqa: E402
 m = ms.build(db, TODAY)
 html = make_templates().get_template("dashboard_analytics_money.html").render(
-    request=None, plant_name="T", current_time="now", m=m, analytics_view="money", cat_action=ms.CAT_ACTION, cat_name=ms.CAT_NAME,
+    request=None, plant_name="T", current_time="now", m=m, analytics_view="money", cat_action=ms.CAT_ACTION, cat_name=ms.CAT_NAME, all_categories=bank_categorize.CATEGORIES,
     categories=[x for x in bank_categorize.CATEGORIES if x[2] in ("out", "nonpl", "other")])
 check("Today's position" in html and "Controls log" in html, "page renders all sections")
 print("ALL PASSED")
@@ -180,6 +180,23 @@ check(before["cats"]["W"]["n"] == 1 and abs(before["written_total"] - 199410) < 
 check(not any(r["key"] == "MONTYDABHADE" for r in before["dormant"]), "written-off customer not in the dormant list")
 html = make_templates().get_template("dashboard_analytics_money.html").render(
     request=None, plant_name="T", current_time="now", m=ms.build(db2, TODAY), analytics_view="money",
-    cat_action=ms.CAT_ACTION, cat_name=ms.CAT_NAME, categories=[])
+    cat_action=ms.CAT_ACTION, cat_name=ms.CAT_NAME, categories=[], all_categories=[])
 check("Monty Dabhade" in html, "written-off customer appears on the page")
 print("WRITTEN-OFF PASSED")
+
+# ---- a month whose payments are mostly untagged is flagged incomplete (not shown as "no drawings")
+for i in range(12):
+    txn(db2, date(2026, 8, 3), 1000 + i, "dr", None, cp=f"P{i}")          # untagged, in a past month
+db2.commit()
+of2 = ms.owner_flows(db2, TODAY, months=3)
+aug = [x for x in of2["rows"] if x["month"] == "2026-08"][0]
+check(aug["incomplete"] and "2026-08" in of2["incomplete_months"], "mostly-untagged month flagged incomplete")
+check(any("INCOMPLETE" in a["text"] for a in ms.alerts(db2, TODAY, {"has_data": False}, ms.position(db2, TODAY, {"has_data": False}, {"total": 0}), {"trend": []}, [], [])), "alert raised for incomplete month")
+print("INCOMPLETE PASSED")
+
+# ---- an untagged credit is listed (so money the owner puts in is never invisible)
+txn(db2, date(2026, 10, 9), 88000, "cr", None, cp="TUSHAR TANAJI")
+db2.commit()
+uc = ms.unclassified_credits(db2, TODAY)
+check(any(x["amount"] == 88000 for x in uc), "untagged 88,000 credit is listed for tagging")
+print("UNTAGGED-CREDIT PASSED")

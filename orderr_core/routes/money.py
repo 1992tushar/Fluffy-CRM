@@ -39,6 +39,7 @@ def analytics_money(
             "current_time": datetime.now(IST).strftime("%d %b %Y, %I:%M %p"),
             "m": data, "cat_action": money_service.CAT_ACTION, "cat_name": money_service.CAT_NAME,
             "categories": [c for c in bank_categorize.CATEGORIES if c[2] in ("out", "nonpl", "other")],
+            "all_categories": bank_categorize.CATEGORIES,
             "analytics_view": "money",
         },
     )

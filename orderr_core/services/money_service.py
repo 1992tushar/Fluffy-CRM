@@ -47,6 +47,7 @@ ALERT_TRANSFER_THRESHOLD = 25_000      # single non-supplier/non-payroll payment
 RAW_SHARE_ALERT = 0.72                 # purchases / sales
 DEAD_PCT_ALERT = 0.04                  # dead-bird kg / live kg bought
 STALE_DAYS = 2                         # feed older than this is flagged
+INCOMPLETE_PCT = 0.25                 # month with more than this share of outflow untagged = owner figure unreliable
 GROW_DAYS = 14                         # customer balance growing with no payment
 # Credits from these payer-name fragments, booked as customer receipts, are
 # flagged (promoter money vs customer cash must not be mixed up).
@@ -430,6 +431,20 @@ def txn_drilldown(db: Session, month: str, klass: str, limit: int = 300) -> list
     return out
 
 
+def unclassified_credits(db: Session, today: date, days: int = 45, limit: int = 40) -> list[dict]:
+    """Money IN with no category yet. Invisible in 'put in' until tagged, so list it
+    (it may be the owner putting money into Fluffy)."""
+    a = today - timedelta(days=days)
+    out = []
+    for t in db.query(BankTransaction).filter(BankTransaction.value_date >= a, BankTransaction.direction == "cr",
+                                              BankTransaction.category.is_(None)).order_by(BankTransaction.amount.desc()):
+        out.append({"id": t.id, "date": t.value_date, "amount": _f(t.amount), "desc": (t.description or "")[:80],
+                    "counterparty": t.counterparty_raw or ""})
+        if len(out) >= limit:
+            break
+    return out
+
+
 def unclassified_recent(db: Session, today: date, days: int = 45, limit: int = 40) -> list[dict]:
     a = today - timedelta(days=days)
     out = []
@@ -477,6 +492,8 @@ def owner_flows(db: Session, today: date, months: int = 6) -> dict:
     g = {k: {"savings": 0.0, "transfers": 0.0, "cards": 0.0, "drawings": 0.0, "in_confirmed": 0.0,
              "in_unconfirmed": 0.0, "bank_in": 0.0, "bank_out": 0.0, "rows": 0} for k in keys}
     untagged = 0.0
+    for k in keys:
+        g[k]["untagged"] = 0.0
     for t in db.query(BankTransaction).filter(BankTransaction.value_date >= start):
         k = _month_key(t.value_date)
         if k not in g:
@@ -485,6 +502,7 @@ def owner_flows(db: Session, today: date, months: int = 6) -> dict:
         amt = _f(t.amount)
         if t.direction == "dr" and classify_txn(t) == "unclassified":
             untagged += amt
+            g[k]["untagged"] += amt
         if t.direction == "cr":
             g[k]["bank_in"] += amt
             kind = owner_in_kind(t)
@@ -514,13 +532,16 @@ def owner_flows(db: Session, today: date, months: int = 6) -> dict:
                      "net_if_unconf": net - x["in_unconfirmed"],
                      "out_pct": (out / x["bank_out"]) if x["bank_out"] else None,
                      "no_bank": x["rows"] < 10 and k != _month_key(today),
+                     "untagged_pct": (x["untagged"] / x["bank_out"]) if x["bank_out"] else 0.0,
+                     "incomplete": x["rows"] >= 10 and x["bank_out"] > 0 and (x["untagged"] / x["bank_out"]) > INCOMPLETE_PCT,
                      "partial": k == _month_key(today)})
         tot["out"] += out; tot["in"] += x["in_confirmed"]; tot["unconf"] += x["in_unconfirmed"]
-    months_with = [r for r in rows if not r["no_bank"] and not r["partial"]]
+    months_with = [r for r in rows if not r["no_bank"] and not r["partial"] and not r["incomplete"]]
     avg = (sum(r["out"] for r in months_with) / len(months_with)) if months_with else 0.0
     return {"rows": rows, "total_out": tot["out"], "total_in": tot["in"], "total_unconf": tot["unconf"],
             "net": tot["out"] - tot["in"], "net_if_unconf": tot["out"] - tot["in"] - tot["unconf"],
-            "avg_month_out": avg, "untagged_out": untagged}
+            "avg_month_out": avg, "untagged_out": untagged,
+            "incomplete_months": [r["month"] for r in rows if r["incomplete"]]}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -732,6 +753,10 @@ def alerts(db: Session, today: date, cust: dict, pos: dict, leak: dict, fresh: l
         add("amber", f"Raw material is {cur[-1]['raw_share']:.0%} of sales in {cur[-1]['month']} (alert above {RAW_SHARE_ALERT:.0%}).")
     if cur and cur[-1]["dead_pct"] and cur[-1]["dead_pct"] > DEAD_PCT_ALERT:
         add("amber", f"Dead birds {cur[-1]['dead_pct']:.1%} of live kg in {cur[-1]['month']} (≈₹{cur[-1]['dead_value']:,.0f} paid for, sold at nil).")
+    inc = owner_flows(db, today)["incomplete_months"]
+    if inc:
+        add("red", f"Owner figures are INCOMPLETE for {', '.join(inc)}: most of that month's bank payments are untagged, "
+                   f"so owner drawings show as ₹0. Tag them in Bank recon.", "/dashboard/analytics/bankrecon")
     n_unc = len(unclassified_recent(db, today, 30, 500))
     if n_unc:
         add("amber", f"{n_unc} bank payments in the last 30 days are unclassified — tag them below.", "#unclassified")
@@ -798,4 +823,4 @@ def build(db: Session, today: date) -> dict:
     al = alerts(db, today, cust, pos, leak, fresh, gaps)
     return {"fresh": fresh, "gaps": gaps, "cust": cust, "supp": supp, "pos": pos, "flows": flows,
             "owner": owner, "bridge": bridge, "leak": leak, "ctl": ctl, "alerts": al,
-            "unclass": unclassified_recent(db, today), "threshold": ALERT_TRANSFER_THRESHOLD}
+            "unclass": unclassified_recent(db, today), "unclass_in": unclassified_credits(db, today), "threshold": ALERT_TRANSFER_THRESHOLD}
