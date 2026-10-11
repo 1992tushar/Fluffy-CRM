@@ -231,6 +231,55 @@ tr.row{cursor:pointer} tr.row:hover{background:var(--green-bg)}
     </div></div>
     {% endif %}
   </div>
+
+  <!-- ── Ignored customers (stale accounts) ─────────────────────────────── -->
+  <div class="bd-section">
+    <div class="section-head">
+      <div class="section-title">Ignored customers · stale accounts</div>
+      <div style="font-size:12px;color:var(--ink3)">
+        {% if pf.ignored.rows %}{{ pf.ignored.rows|length }} ignored{% else %}none ignored{% endif %}
+      </div>
+    </div>
+    <div class="note">
+      Old or dormant accounts (an unadjusted advance, a closed outlet you can't delete in Vasy) that
+      distort the totals. Ignoring one removes its balance — debit <b>or</b> credit — from AR, the
+      "Customers in credit" figure, the risk map and the Customer 360 total. Recorded in OrdeRR only;
+      the Vasy ledger is untouched and <b>Undo</b> brings the customer straight back.
+    </div>
+    <div class="bd-form">
+      <select id="ig-cust"><option value="">Select customer to ignore…</option></select>
+      <select id="ig-reason">
+        <option>Stale / dormant account</option>
+        <option>Old advance</option>
+        <option>Closed — can't delete in Vasy</option>
+        <option>Other</option>
+      </select>
+      <input id="ig-note" type="text" placeholder="Note (optional)" maxlength="200" autocomplete="off">
+      <button class="btn" id="ig-save" onclick="ignoreCust()">Ignore</button>
+    </div>
+    <div class="bd-err" id="ig-err"></div>
+    {% if pf.ignored.rows %}
+    <div class="wrap"><div class="scroll">
+      <table>
+        <thead><tr>
+          <th>Customer</th><th class="num">Balance now</th><th>Reason</th><th>Date</th><th>Note</th><th></th>
+        </tr></thead>
+        <tbody>
+          {% for b in pf.ignored.rows %}
+          <tr>
+            <td><div class="cust-name"><a href="/dashboard/analytics/customer/{{ b.customer_id }}" style="color:inherit;text-decoration:none">{{ b.name }}</a></div></td>
+            <td class="num">{{ b.balance_fmt }}{% if b.balance < 0 %} <span class="cust-sub">(credit)</span>{% endif %}</td>
+            <td><span class="chip">{{ b.reason }}</span></td>
+            <td>{{ b.ignored_on }}</td>
+            <td class="cust-sub">{{ b.note or '—' }}</td>
+            <td><button class="btn-undo" onclick="unignoreCust({{ b.customer_id }}, this)">Undo</button></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div></div>
+    {% endif %}
+  </div>
 </main>
 
 <script>
@@ -308,6 +357,44 @@ async function writeOff(){
     if(!res.ok){ const j=await res.json().catch(()=>({})); bdError(j.detail||'Could not write off.'); btn.disabled=false; return; }
     location.reload();
   }catch(e){ bdError('Network error — try again.'); btn.disabled=false; }
+}
+// ── ignore customer ──
+const IG_CANDS = {{ pf.ignored.candidates | tojson }};
+const igSel=document.getElementById('ig-cust');
+IG_CANDS.forEach(r=>{
+  const o=document.createElement('option');
+  o.value=r.customer_id; o.textContent=r.name+' — '+r.balance_fmt+(r.balance<0?' (credit)':'');
+  igSel.appendChild(o);
+});
+function igError(msg){
+  const el=document.getElementById('ig-err');
+  el.textContent=msg||''; el.style.display=msg?'block':'none';
+}
+async function ignoreCust(){
+  igError('');
+  const cid=igSel.value;
+  if(!cid){ igError('Pick a customer first.'); return; }
+  const name=igSel.options[igSel.selectedIndex].textContent;
+  if(!confirm('Ignore '+name+'?\n\nTheir balance leaves AR and credit totals. You can undo this any time.')) return;
+  const btn=document.getElementById('ig-save'); btn.disabled=true;
+  try{
+    const res=await fetch('/dashboard/analytics/ignore-customer',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({customer_id:parseInt(cid,10),
+                           reason:document.getElementById('ig-reason').value,
+                           note:document.getElementById('ig-note').value.trim()})});
+    if(!res.ok){ const j=await res.json().catch(()=>({})); igError(j.detail||'Could not ignore.'); btn.disabled=false; return; }
+    location.reload();
+  }catch(e){ igError('Network error — try again.'); btn.disabled=false; }
+}
+async function unignoreCust(cid, btn){
+  if(!confirm('Stop ignoring this customer? Their balance rejoins the totals.')) return;
+  btn.disabled=true;
+  try{
+    const res=await fetch('/dashboard/analytics/ignore-customer/'+cid+'/delete',{method:'POST'});
+    if(!res.ok){ const j=await res.json().catch(()=>({})); igError(j.detail||'Could not undo.'); btn.disabled=false; return; }
+    location.reload();
+  }catch(e){ igError('Network error — try again.'); btn.disabled=false; }
 }
 async function undoWriteOff(cid, btn){
   if(!confirm('Undo this write-off? The balance rejoins AR immediately.')) return;

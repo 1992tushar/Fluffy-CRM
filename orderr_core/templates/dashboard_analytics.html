@@ -262,6 +262,7 @@ let sortKey = "revenue", sortDir = -1;   // -1 desc, 1 asc
 
 function outstandingCell(r){
   if (r.is_bad_debt) return '<span style="color:var(--red);font-weight:800">BAD DEBT</span>';
+  if (r.is_ignored) return '<span class="cust-sub">ignored</span>';
   if (r.outstanding === "" || r.outstanding === null) return '<span class="cust-sub">—</span>';
   let arrow = "";
   if (r.balance_dir === "up") arrow = ' <span style="color:var(--red)">▲</span>';
@@ -356,7 +357,7 @@ function renderC360(){
   }
   document.getElementById('c360-count').textContent = rows.length + ' of ' + C360_ROWS.length + ' customers';
 
-  const totalOut = rows.reduce((s,r) => s + (r.is_bad_debt || r.outstanding === "" || r.outstanding === null ? 0 : +r.outstanding), 0);
+  const totalOut = rows.reduce((s,r) => s + (r.is_bad_debt || r.is_ignored || r.outstanding === "" || r.outstanding === null || +r.outstanding <= 0 ? 0 : +r.outstanding), 0);
   document.getElementById('c360-total').innerHTML =
     '<span class="lbl">Outstanding</span>' +
     new Intl.NumberFormat('en-IN', {style:'currency', currency:'INR', maximumFractionDigits:2}).format(totalOut);

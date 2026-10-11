@@ -29,6 +29,7 @@ from orderr_core.models.actuals import OrderItemActual
 from orderr_core.models.customer_receipt import CustomerReceipt
 from orderr_core.models.outstanding_snapshot import OutstandingSnapshot
 from orderr_core.models.bad_debt import BadDebt
+from orderr_core.models.ignored_customer import IgnoredCustomer
 from orderr_core.models.vasy_invoice import VasyInvoice
 from orderr_core.models.vasy_purchase import VasyPurchase
 from orderr_core.models.vasy_expense import VasyExpense
@@ -319,6 +320,17 @@ def _bad_debt_ids(db: Session) -> set:
     return {cid for (cid,) in db.query(BadDebt.customer_id).all()}
 
 
+def _ignored_ids(db: Session) -> set:
+    """customer_ids the owner tagged 'ignore' — stale accounts (debit or credit)
+    that must not distort AR / credit totals. OrdeRR overlay only."""
+    return {cid for (cid,) in db.query(IgnoredCustomer.customer_id).all()}
+
+
+def _excluded_ids(db: Session) -> set:
+    """Customers whose balance is left out of AR: bad debt + ignored."""
+    return _bad_debt_ids(db) | _ignored_ids(db)
+
+
 def _outstanding_total(db: Session, snapshot_date, bad_ids: set = None):
     """Gross AR = sum of DEBTOR balances only (closing > 0), excluding customers
     written off as bad debt. Customers in credit (negative closing) are a
@@ -328,7 +340,7 @@ def _outstanding_total(db: Session, snapshot_date, bad_ids: set = None):
     if snapshot_date is None:
         return 0.0
     if bad_ids is None:
-        bad_ids = _bad_debt_ids(db)
+        bad_ids = _excluded_ids(db)
     q = db.query(func.coalesce(func.sum(OutstandingSnapshot.closing), 0)) \
         .filter(OutstandingSnapshot.snapshot_date == snapshot_date,
                 OutstandingSnapshot.closing > 0)
@@ -1741,6 +1753,7 @@ def receivables(db: Session, today: date) -> dict:
     sp_name = {s.id: s.name for s in db.query(Salesperson).all()}
     cust = {c.id: c for c in db.query(Customer).all()}
     bad_ids = _bad_debt_ids(db)
+    ignored_ids = _ignored_ids(db)
 
     rows = []
     total_ar = 0.0
@@ -1752,6 +1765,8 @@ def receivables(db: Session, today: date) -> dict:
 
     for s in snaps:
         closing = float(s.closing)
+        if s.customer_id in ignored_ids:
+            continue                      # tagged ignore — in neither AR nor credits
         if s.customer_id in bad_ids:
             # written off as bad debt — out of AR, tallied separately
             if closing > 0:
@@ -1921,6 +1936,7 @@ def customer_360(db: Session, today: date, days=30) -> dict:
     rows = []
     areas, salespeople = set(), set()
     bad_ids = _bad_debt_ids(db)
+    ignored_ids = _ignored_ids(db)
     for c in db.query(Customer).all():
         ph = c.phone_number
         rev = revenue.get(c.id, 0.0)
@@ -1975,6 +1991,7 @@ def customer_360(db: Session, today: date, days=30) -> dict:
             "outstanding": round(outstanding, 2) if outstanding is not None else "",
             "outstanding_fmt": fmt_inr(outstanding) if outstanding is not None else "—",
             "is_bad_debt": c.id in bad_ids,
+            "is_ignored": c.id in ignored_ids,
             "balance_dir": bal_dir,
             "last_payment_display": last_pay.strftime("%d %b %Y") if last_pay else "—",
             "days_since_payment": last_pay_days if last_pay_days is not None else "",
@@ -2581,9 +2598,37 @@ def portfolio(db: Session, today: date) -> dict:
                                      OutstandingSnapshot.customer_id != None).all()):  # noqa: E711
             out_by[cid] = float(closing)
 
+    ign_recs = {i.customer_id: i for i in db.query(IgnoredCustomer).all()}
+    bal_now = _closing_by_customer(db, latest_snap)
+    ignored_rows = []
+    for cid, i in ign_recs.items():
+        c = customers.get(cid)
+        if c is None:
+            continue
+        bal = bal_now.get(cid, float(c.outstanding or 0))
+        ignored_rows.append({
+            "customer_id": cid,
+            "name": c.restaurant_name or (c.phone_number or f"#{cid}"),
+            "balance": round(bal, 2), "balance_fmt": fmt_inr(bal),
+            "tagged_fmt": fmt_inr(i.amount),
+            "reason": i.reason, "note": i.note or "",
+            "ignored_on": i.ignored_on.strftime("%d %b %Y") if i.ignored_on else "",
+        })
+    ignored_rows.sort(key=lambda r: abs(r["balance"]), reverse=True)
+    # every customer with a live (non-zero) balance that could still be tagged
+    ignore_candidates = sorted(
+        ({"customer_id": cid,
+          "name": customers[cid].restaurant_name or (customers[cid].phone_number or f"#{cid}"),
+          "balance": round(b, 2), "balance_fmt": fmt_inr(b)}
+         for cid, b in bal_now.items()
+         if cid in customers and cid not in ign_recs and cid not in bad_recs and round(b, 2) != 0),
+        key=lambda r: -abs(r["balance"]))
+
     rows = []
     bad_rows = []
     for cid, c in customers.items():
+        if cid in ign_recs:
+            continue                                    # tagged ignore → out of the map
         revenue = float(rev.get(cid, 0.0))
         cur_out = out_by.get(cid, float(c.outstanding or 0))
         if cur_out < 0:
@@ -2680,7 +2725,44 @@ def portfolio(db: Session, today: date) -> dict:
             "total_fmt": fmt_inr(round(bad_total, 2)),
             "by_salesperson": bad_by_sp,
         },
+        "ignored": {"rows": ignored_rows, "candidates": ignore_candidates},
     }
+
+
+def ignore_customer(db: Session, customer_id: int, reason: str, note: str, today: date):
+    """Tag a customer 'ignore' — their balance (debit or credit) is left out of
+    AR, credit totals, the risk map and the Customer 360 total. OrdeRR overlay
+    only; Vasy untouched. Returns an error string, or None on success."""
+    customer = db.query(Customer).get(customer_id)
+    if customer is None:
+        return "Customer not found."
+    if db.query(IgnoredCustomer).filter_by(customer_id=customer_id).first():
+        return "This customer is already ignored."
+    if db.query(BadDebt).filter_by(customer_id=customer_id).first():
+        return "This customer is already written off as bad debt."
+    latest = db.query(func.max(OutstandingSnapshot.snapshot_date)).scalar()
+    amount = None
+    if latest is not None:
+        amount = (db.query(func.sum(OutstandingSnapshot.closing))
+                  .filter(OutstandingSnapshot.snapshot_date == latest,
+                          OutstandingSnapshot.customer_id == customer_id).scalar())
+    amount = float(amount) if amount is not None else float(customer.outstanding or 0)
+    db.add(IgnoredCustomer(customer_id=customer_id, amount=round(amount, 2),
+                           reason=(reason or "Other").strip() or "Other",
+                           note=(note or "").strip() or None,
+                           ignored_on=today))
+    db.commit()
+    return None
+
+
+def unignore_customer(db: Session, customer_id: int):
+    """Remove the ignore tag — the balance rejoins the totals on next load."""
+    rec = db.query(IgnoredCustomer).filter_by(customer_id=customer_id).first()
+    if rec is None:
+        return "This customer is not ignored."
+    db.delete(rec)
+    db.commit()
+    return None
 
 
 def write_off_bad_debt(db: Session, customer_id: int, reason: str, note: str, today: date):
@@ -2760,7 +2842,7 @@ def payment_behaviour(db: Session, today: date) -> dict:
 
     # AR over time (total positive balances per snapshot date, bad debt excluded
     # throughout so the series matches the netted Total AR KPI).
-    bad_ids = _bad_debt_ids(db)
+    bad_ids = _excluded_ids(db)
     ar_series = []
     for (d,) in (db.query(OutstandingSnapshot.snapshot_date).distinct()
                  .order_by(OutstandingSnapshot.snapshot_date).all()):

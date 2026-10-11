@@ -2063,6 +2063,47 @@ async def analytics_undo_bad_debt(
     return JSONResponse({"status": "ok"})
 
 
+@router.post("/analytics/ignore-customer")
+async def analytics_ignore_customer(
+    request: Request,
+    db: Session = Depends(get_db),
+    username: str = Depends(require_auth),
+):
+    """Tag a stale customer 'ignore' so their balance stays out of AR / credit
+    totals. OrdeRR-side only — Vasy untouched; undo restores them."""
+    from orderr_core.services import analytics_service
+
+    body = await request.json()
+    try:
+        customer_id = int(body.get("customer_id"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid customer id.")
+    err = analytics_service.ignore_customer(
+        db, customer_id,
+        reason=str(body.get("reason") or ""),
+        note=str(body.get("note") or ""),
+        today=get_current_business_date(),
+    )
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    return JSONResponse({"status": "ok"})
+
+
+@router.post("/analytics/ignore-customer/{customer_id}/delete")
+async def analytics_unignore_customer(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    username: str = Depends(require_auth),
+):
+    """Remove the ignore tag — the customer rejoins the totals."""
+    from orderr_core.services import analytics_service
+
+    err = analytics_service.unignore_customer(db, customer_id)
+    if err:
+        raise HTTPException(status_code=404, detail=err)
+    return JSONResponse({"status": "ok"})
+
+
 @router.get("/analytics/customer/{customer_id}", response_class=HTMLResponse)
 def analytics_customer(
     request: Request,

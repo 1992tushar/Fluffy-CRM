@@ -73,6 +73,7 @@ from orderr_core.models.vasy_sales_item import VasySalesItem             # noqa:
 
 # Analytics — bad-debt write-offs (customer balances marked unrecoverable)
 from orderr_core.models.bad_debt import BadDebt                          # noqa: F401
+from orderr_core.models.ignored_customer import IgnoredCustomer          # noqa: F401
 
 # Registers & Reminders — sundries register, critical notes, important dates
 from orderr_core.models.sundry import SundryItem, SundryPurchase         # noqa: F401
