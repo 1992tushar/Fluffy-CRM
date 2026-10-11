@@ -122,3 +122,22 @@ html = make_templates().get_template("dashboard_analytics_money.html").render(
     categories=[x for x in bank_categorize.CATEGORIES if x[2] in ("out", "nonpl", "other")])
 check("Today's position" in html and "Controls log" in html, "page renders all sections")
 print("ALL PASSED")
+
+# ---- owner account: out vs in
+from orderr_core.models.cash_entry import CashEntry  # noqa: E402
+db2 = SessionLocal()
+txn(db2, date(2026, 10, 5), 7000, "dr", "investment_savings", cp="SAVER")
+txn(db2, date(2026, 10, 6), 40000, "dr", "internal_transfer", cp="TUSHAR TAN")
+txn(db2, date(2026, 10, 6), 10000, "cr", "internal_transfer", cp="TUSHAR TANAJI")
+txn(db2, date(2026, 10, 7), 25000, "cr", "customer_payment", cp="SANDEEP TANAJI")
+txn(db2, date(2026, 10, 7), 5000, "cr", "customer_payment", cp="REAL CUSTOMER")
+db2.add(CashEntry(entry_date=date(2026, 10, 8), type="drawing", direction="out", amount=3000))
+db2.commit()
+of = ms.owner_flows(db2, TODAY, months=2)
+r = [x for x in of["rows"] if x["month"] == "2026-10"][0]
+check(r["savings"] == 7000 and r["transfers"] == 40000 and r["drawings"] == 3000, "owner OUT: savings 7k + transfers 40k + drawings 3k")
+check(r["out"] == 50000 and r["in_confirmed"] == 10000 and r["net"] == 40000, "net out = 50k - 10k confirmed in")
+check(r["in_unconfirmed"] == 25000 and r["net_if_unconf"] == 15000, "promoter-named customer credit is unconfirmed, not netted")
+check(len(ms.txn_drilldown(db2, "2026-10", "owner_in_unconfirmed")) == 1, "unconfirmed drill shows 1 credit")
+check(any(x["category"] == "drawing" for x in ms.txn_drilldown(db2, "2026-10", "owner")), "owner drill includes cash drawing")
+print("OWNER FLOW PASSED")

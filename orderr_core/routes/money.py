@@ -51,7 +51,7 @@ def analytics_money_drill(
     db: Session = Depends(get_db),
     username: str = Depends(require_auth),
 ):
-    if klass not in money_service.CLASSES:
+    if klass not in money_service.CLASSES + list(money_service.OWNER_IN_CLASSES):
         raise HTTPException(status_code=400, detail="Unknown class.")
     rows = money_service.txn_drilldown(db, month, klass)
     for r in rows:

@@ -26,6 +26,7 @@ from orderr_core.models.salesperson import Salesperson  # noqa: F401  (mapper re
 from orderr_core.models.order import Order  # noqa: F401
 from orderr_core.models.bank_transaction import BankTransaction
 from orderr_core.models.bad_debt import BadDebt
+from orderr_core.models.cash_entry import CashEntry
 from orderr_core.models.customer import Customer
 from orderr_core.models.customer_receipt import CustomerReceipt
 from orderr_core.models.import_log import ImportLog
@@ -329,9 +330,18 @@ def txn_drilldown(db: Session, month: str, klass: str, limit: int = 300) -> list
     y, m = int(month[:4]), int(month[5:7])
     a = date(y, m, 1)
     b = _add_months(a, 1)
+    out = []
+    if klass in OWNER_IN_CLASSES:
+        q = db.query(BankTransaction).filter(BankTransaction.value_date >= a, BankTransaction.value_date < b,
+                                             BankTransaction.direction == "cr").order_by(BankTransaction.amount.desc())
+        for t in q:
+            if owner_in_kind(t) != klass:
+                continue
+            out.append({"id": t.id, "date": t.value_date, "amount": _f(t.amount), "desc": (t.description or "")[:90],
+                        "counterparty": t.counterparty_raw or "", "category": t.category, "remark": (t.remark or "") + (f" -> {t.party_label}" if t.party_label else "")})
+        return out[:limit]
     q = db.query(BankTransaction).filter(BankTransaction.value_date >= a, BankTransaction.value_date < b,
                                          BankTransaction.direction == "dr").order_by(BankTransaction.amount.desc())
-    out = []
     for t in q:
         if classify_txn(t) != klass:
             continue
@@ -339,6 +349,11 @@ def txn_drilldown(db: Session, month: str, klass: str, limit: int = 300) -> list
                     "counterparty": t.counterparty_raw or "", "category": t.category, "remark": t.remark or ""})
         if len(out) >= limit:
             break
+    if klass == "owner":                      # cash drawings from the Cash Book belong to the same story
+        for e in db.query(CashEntry).filter(CashEntry.entry_date >= a, CashEntry.entry_date < b, CashEntry.type == "drawing"):
+            out.append({"id": None, "date": e.entry_date, "amount": _f(e.amount), "desc": "Cash drawing (Cash Book)",
+                        "counterparty": "Owner", "category": "drawing", "remark": e.note or ""})
+        out.sort(key=lambda r: -r["amount"])
     return out
 
 
@@ -353,6 +368,86 @@ def unclassified_recent(db: Session, today: date, days: int = 45, limit: int = 4
             if len(out) >= limit:
                 break
     return out
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 4b. Owner account — taken OUT of Fluffy vs put IN
+# ═══════════════════════════════════════════════════════════════════════════
+OWNER_IN_CLASSES = ("owner_in", "owner_in_unconfirmed")
+
+
+def _promoter_credit(t) -> bool:
+    nm = (t.counterparty_raw or "").upper()
+    return t.direction == "cr" and any(tok in nm for tok in OWNER_NAME_TOKENS)
+
+
+def owner_in_kind(t) -> Optional[str]:
+    """Credit that is owner/related money coming back into Fluffy.
+    owner_in             - tagged internal_transfer (you confirmed it is yours)
+    owner_in_unconfirmed - promoter-named payer booked as a customer payment
+                           (could be customer cash collected by an individual)"""
+    if t.direction != "cr":
+        return None
+    if t.category == "internal_transfer":
+        return "owner_in"
+    if t.category in (None, "customer_payment", "other") and _promoter_credit(t):
+        return "owner_in_unconfirmed"
+    return None
+
+
+def owner_flows(db: Session, today: date, months: int = 6) -> dict:
+    """Per month: money taken out of the Fluffy account (savings, transfers,
+    cards, cash drawings) against money put in. 'Unconfirmed' credits are shown
+    separately and NOT netted until you confirm them."""
+    start = _add_months(_month_start(today), -(months - 1))
+    keys = [_month_key(_add_months(start, i)) for i in range(months)]
+    g = {k: {"savings": 0.0, "transfers": 0.0, "cards": 0.0, "drawings": 0.0, "in_confirmed": 0.0,
+             "in_unconfirmed": 0.0, "bank_in": 0.0, "bank_out": 0.0, "rows": 0} for k in keys}
+    untagged = 0.0
+    for t in db.query(BankTransaction).filter(BankTransaction.value_date >= start):
+        k = _month_key(t.value_date)
+        if k not in g:
+            continue
+        g[k]["rows"] += 1
+        amt = _f(t.amount)
+        if t.direction == "dr" and classify_txn(t) == "unclassified":
+            untagged += amt
+        if t.direction == "cr":
+            g[k]["bank_in"] += amt
+            kind = owner_in_kind(t)
+            if kind == "owner_in":
+                g[k]["in_confirmed"] += amt
+            elif kind == "owner_in_unconfirmed":
+                g[k]["in_unconfirmed"] += amt
+        else:
+            g[k]["bank_out"] += amt
+            if t.category == "investment_savings":
+                g[k]["savings"] += amt
+            elif t.category == "internal_transfer":
+                g[k]["transfers"] += amt
+            elif t.category == "credit_card_bill":
+                g[k]["cards"] += amt
+    for e in db.query(CashEntry).filter(CashEntry.entry_date >= start, CashEntry.type == "drawing"):
+        k = _month_key(e.entry_date)
+        if k in g:
+            g[k]["drawings"] += _f(e.amount)
+    rows = []
+    tot = {"out": 0.0, "in": 0.0, "unconf": 0.0}
+    for k in keys:
+        x = g[k]
+        out = x["savings"] + x["transfers"] + x["cards"] + x["drawings"]
+        net = out - x["in_confirmed"]
+        rows.append({"month": k, **x, "out": out, "net": net,
+                     "net_if_unconf": net - x["in_unconfirmed"],
+                     "out_pct": (out / x["bank_out"]) if x["bank_out"] else None,
+                     "no_bank": x["rows"] < 10 and k != _month_key(today),
+                     "partial": k == _month_key(today)})
+        tot["out"] += out; tot["in"] += x["in_confirmed"]; tot["unconf"] += x["in_unconfirmed"]
+    months_with = [r for r in rows if not r["no_bank"] and not r["partial"]]
+    avg = (sum(r["out"] for r in months_with) / len(months_with)) if months_with else 0.0
+    return {"rows": rows, "total_out": tot["out"], "total_in": tot["in"], "total_unconf": tot["unconf"],
+            "net": tot["out"] - tot["in"], "net_if_unconf": tot["out"] - tot["in"] - tot["unconf"],
+            "avg_month_out": avg, "untagged_out": untagged}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -623,10 +718,11 @@ def build(db: Session, today: date) -> dict:
     supp = supplier_position(db)
     pos = position(db, today, cust, supp)
     flows = outflow_by_class(db, today)
+    owner = owner_flows(db, today)
     bridge = cash_bridge(db, today)
     leak = leakage(db, today)
     ctl = controls_log(db, today)
     al = alerts(db, today, cust, pos, leak, fresh, gaps)
     return {"fresh": fresh, "gaps": gaps, "cust": cust, "supp": supp, "pos": pos, "flows": flows,
-            "bridge": bridge, "leak": leak, "ctl": ctl, "alerts": al,
+            "owner": owner, "bridge": bridge, "leak": leak, "ctl": ctl, "alerts": al,
             "unclass": unclassified_recent(db, today), "threshold": ALERT_TRANSFER_THRESHOLD}
