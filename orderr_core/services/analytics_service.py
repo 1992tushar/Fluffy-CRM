@@ -1920,6 +1920,7 @@ def customer_360(db: Session, today: date, days=30) -> dict:
 
     rows = []
     areas, salespeople = set(), set()
+    bad_ids = _bad_debt_ids(db)
     for c in db.query(Customer).all():
         ph = c.phone_number
         rev = revenue.get(c.id, 0.0)
@@ -1973,6 +1974,7 @@ def customer_360(db: Session, today: date, days=30) -> dict:
             # P2-7 payment columns
             "outstanding": round(outstanding, 2) if outstanding is not None else "",
             "outstanding_fmt": fmt_inr(outstanding) if outstanding is not None else "—",
+            "is_bad_debt": c.id in bad_ids,
             "balance_dir": bal_dir,
             "last_payment_display": last_pay.strftime("%d %b %Y") if last_pay else "—",
             "days_since_payment": last_pay_days if last_pay_days is not None else "",
