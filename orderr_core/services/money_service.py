@@ -483,14 +483,19 @@ def txn_drilldown(db: Session, month: str, klass: str, limit: int = 300) -> list
     return out[:limit]
 
 
-def unclassified_credits(db: Session, today: date, days: int = 45, limit: int = 40) -> list[dict]:
+def unclassified_credits(db: Session, today: date, days: int = 45, limit: int = 40, big: float = 50_000,
+                         big_days: int = 200) -> list[dict]:
     """Money IN with no category yet. Invisible in 'put in' until tagged, so list it
-    (it may be the owner putting money into Fluffy)."""
+    (it may be the owner putting money into Fluffy). Recent ones, plus any BIG one
+    in the last ~6 months - a Rs 10L credit must not hide just because it is old."""
     a = today - timedelta(days=days)
+    a_big = today - timedelta(days=big_days)
     out = []
-    for t in db.query(BankTransaction).filter(BankTransaction.value_date >= a, BankTransaction.direction == "cr",
+    for t in db.query(BankTransaction).filter(BankTransaction.value_date >= a_big, BankTransaction.direction == "cr",
                                               BankTransaction.category.is_(None)).order_by(BankTransaction.amount.desc()):
         if biz_kind(t):
+            continue
+        if t.value_date < a and _f(t.amount) < big:
             continue
         out.append({"id": t.id, "date": t.value_date, "amount": _f(t.amount), "desc": (t.description or "")[:80],
                     "counterparty": t.counterparty_raw or ""})

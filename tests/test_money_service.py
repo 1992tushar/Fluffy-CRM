@@ -233,3 +233,12 @@ check(not any(x["amount"] == 230000 for x in ms.unclassified_credits(db2, TODAY)
 check(sum(x["amount"] for x in ms.txn_drilldown(db2, "2026-10", "biz_out")) == 700000, "biz_out drill adds up")
 check(sum(x["amount"] for x in ms.txn_drilldown(db2, "2026-10", "owner_transfers")) == r3["transfers"], "owner transfers drill excludes PPC")
 print("BIZ FUNDING PASSED")
+
+# ---- an OLD but big untagged credit (e.g. Rs 10L from the owner months ago) is still listed
+txn(db2, date(2026, 5, 29), 1000000, "cr", None, cp="", desc="RTGS RITALI TUSHAR THOPTE")
+txn(db2, date(2026, 5, 30), 800, "cr", None, cp="", desc="small old credit")
+db2.commit()
+uc2 = ms.unclassified_credits(db2, TODAY)
+check(any(x["amount"] == 1000000 for x in uc2), "old big untagged credit is listed")
+check(not any(x["amount"] == 800 for x in uc2), "old small untagged credit is not listed")
+print("BIG-CREDIT PASSED")

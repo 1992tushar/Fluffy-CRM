@@ -213,7 +213,7 @@ select,input[type=text]{font-size:12px;padding:5px 8px;border:1px solid var(--bo
   {% else %}<div class="note" style="border-left-color:var(--green-border)">Nothing untagged in the last 45 days.</div>{% endif %}
 
   <h2 id="unclassified-in">Untagged credits — money in with no category</h2>
-  <div class="sub">If any of these is you putting money into Fluffy, tag it <b>Internal Transfer</b> so it counts under "Put in" above. Until tagged it is not counted anywhere.</div>
+  <div class="sub">If any of these is you putting money into Fluffy, tag it <b>Internal Transfer</b> so it counts under "Put in" above. Until tagged it is not counted anywhere. Shows the last 45 days plus any credit of ₹50,000 or more from the last ~6 months.</div>
   {% if m.unclass_in %}
   <div class="wrap"><div class="scroll"><table>
     <thead><tr><th>Date</th><th class="num">Amount</th><th>Payer / narration</th><th>Category</th><th>Remark</th><th>Remember</th><th></th></tr></thead>
@@ -227,7 +227,7 @@ select,input[type=text]{font-size:12px;padding:5px 8px;border:1px solid var(--bo
         <td><button class="btn" onclick="tagTxn({{ u.id }})">Save</button></td></tr>
     {% endfor %}
     </tbody></table></div></div>
-  {% else %}<div class="note" style="border-left-color:var(--green-border)">No untagged credits in the last 45 days.</div>{% endif %}
+  {% else %}<div class="note" style="border-left-color:var(--green-border)">No untagged credits to show.</div>{% endif %}
 
   <!-- ══ 3. CASH BRIDGE ══ -->
   <h2>Cash bridge — why sales and cash differ</h2>
