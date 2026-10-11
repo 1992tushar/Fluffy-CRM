@@ -50,8 +50,11 @@ STALE_DAYS = 2                         # feed older than this is flagged
 INCOMPLETE_PCT = 0.25                 # month with more than this share of outflow untagged = owner figure unreliable
 GROW_DAYS = 14                         # customer balance growing with no payment
 # Credits from these payer-name fragments, booked as customer receipts, are
-# flagged (promoter money vs customer cash must not be mixed up).
-OWNER_NAME_TOKENS = ("TANAJI", "THOPTE")
+# flagged (owner money vs customer cash must not be mixed up).
+# Owner = Tushar only. Sandeep Tanaji is an employee AND a reselling customer
+# (owner's brother) - his payments are ordinary customer payments, so the bare
+# surname must never be used here.
+OWNER_NAME_TOKENS = ("TUSHAR TANAJI", "TUSHAR THOPTE")
 
 # ── bank categories → money class ───────────────────────────────────────────
 CLASSES = ["supplier", "payroll", "operating", "loan", "owner", "reversal", "unclassified"]
@@ -488,7 +491,7 @@ def _promoter_credit(t) -> bool:
 def owner_in_kind(t) -> Optional[str]:
     """Credit that is owner/related money coming back into Fluffy.
     owner_in             - tagged internal_transfer (you confirmed it is yours)
-    owner_in_unconfirmed - promoter-named payer booked as a customer payment
+    owner_in_unconfirmed - owner-named payer booked as a customer payment
                            (could be customer cash collected by an individual)"""
     if t.direction != "cr":
         return None
@@ -744,7 +747,7 @@ def alerts(db: Session, today: date, cust: dict, pos: dict, leak: dict, fresh: l
             add("red" if c in ("owner", "unclassified") else "amber",
                 f"₹{_f(t.amount):,.0f} out on {t.value_date:%d %b} · {CLASS_LABEL[c]} · {(t.counterparty_raw or t.description or '')[:40]}",
                 "/dashboard/analytics/bankrecon")
-    # promoter-named payer booked as a customer receipt (one summary alert)
+    # owner-named payer (Tushar) booked as a customer receipt (one summary alert)
     hits = []
     for t in db.query(BankTransaction).filter(BankTransaction.value_date >= today - timedelta(days=30),
                                               BankTransaction.direction == "cr", BankTransaction.category == "customer_payment"):
@@ -753,9 +756,9 @@ def alerts(db: Session, today: date, cust: dict, pos: dict, leak: dict, fresh: l
             hits.append(t)
     if hits:
         who = sorted({(t.party_label or "no customer") for t in hits})
-        add("amber", f"{len(hits)} credits worth ₹{sum(_f(t.amount) for t in hits):,.0f} from promoter-named payers in the last 30 days "
+        add("amber", f"{len(hits)} credits worth ₹{sum(_f(t.amount) for t in hits):,.0f} from the owner's name (Tushar) in the last 30 days "
                      f"are booked as customer payments ({', '.join(who[:4])}{'…' if len(who) > 4 else ''}). "
-                     f"Promoter money or customer cash?", "/dashboard/analytics/bankrecon")
+                     f"Owner money or customer cash?", "/dashboard/analytics/bankrecon")
     if pos.get("reserve_gap") is not None and pos["reserve_gap"] > 0:
         add("red", f"Bank ₹{pos['balance']:,.0f} covers {pos['cover_days']:.1f} days of outflows — "
                    f"₹{pos['reserve_gap']:,.0f} below a one-week reserve.")

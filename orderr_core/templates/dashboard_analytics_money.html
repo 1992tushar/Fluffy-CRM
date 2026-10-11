@@ -134,13 +134,13 @@ select,input[type=text]{font-size:12px;padding:5px 8px;border:1px solid var(--bo
   <!-- ══ OWNER ACCOUNT: OUT vs IN ══ -->
   {% set o = m.owner %}
   <h2>Owner account — taken out of Fluffy vs put in</h2>
-  <div class="sub">Out = savings / recurring deposit, transfers to owner-related accounts, credit-card bills (all from your Bank-recon tags) and cash drawings from the Cash Book. In = credits you tagged as internal transfer. Credits from promoter-named payers that are booked as customer payments are shown as <b>unconfirmed</b> and are not netted until you confirm them. Click an amount to see the payments.</div>
+  <div class="sub">Out = savings / recurring deposit, transfers to owner-related accounts, credit-card bills (all from your Bank-recon tags) and cash drawings from the Cash Book. In = credits you tagged as internal transfer. Credits that carry your own name (Tushar) but are booked as customer payments are shown as <b>unconfirmed</b> and are not netted until you confirm them. Click an amount to see the payments.</div>
   {% if o.incomplete_months %}<div class="al red" style="margin-bottom:10px">Months not fully tagged: <b>{{ o.incomplete_months|join(', ') }}</b>. Those statements are loaded but their payments have no category yet, so out / in for those months is understated. Tag them in <a href="/dashboard/analytics/bankrecon">Bank recon</a> (suggestions are pre-filled for known payees).</div>{% endif %}
   <div class="kpis" style="grid-template-columns:repeat(4,1fr)">
     <div class="kpi bad"><div class="n">{{ inr(o.total_out) }}</div><div class="l">Taken out ({{ o.rows|length }} months)</div><div class="s">≈ {{ inr(o.avg_month_out) }} a month (months with bank data)</div></div>
     <div class="kpi ok"><div class="n">{{ inr(o.total_in) }}</div><div class="l">Put in (confirmed)</div><div class="s">tagged internal transfer</div></div>
     <div class="kpi {{ 'bad' if o.net > 0 else 'ok' }}"><div class="n">{{ inr(o.net) }}</div><div class="l">Net taken out</div><div class="s">out − confirmed in</div></div>
-    <div class="kpi warn"><div class="n">{{ inr(o.total_unconf) }}</div><div class="l">Unconfirmed credits</div><div class="s">net would be {{ inr(o.net_if_unconf) }} if all are promoter money</div></div>
+    <div class="kpi warn"><div class="n">{{ inr(o.total_unconf) }}</div><div class="l">Unconfirmed credits</div><div class="s">net would be {{ inr(o.net_if_unconf) }} if all are your own money</div></div>
   </div>
   <div class="wrap" style="margin-top:12px"><div class="scroll"><table>
     <thead><tr><th>Month</th><th class="num">Savings / RD</th><th class="num">Transfers</th><th class="num">Card bills</th><th class="num">Cash drawings</th><th class="num">Total OUT</th><th class="num">% of bank outflow</th><th class="num">Put IN (confirmed)</th><th class="num">Unconfirmed IN</th><th class="num">NET out</th></tr></thead>
