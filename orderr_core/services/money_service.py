@@ -231,11 +231,36 @@ def receivable_model(db: Session, today: date) -> dict:
             "last_receipt": last_rec.get(s.party_key),
             "days_since_receipt": (today - last_rec[s.party_key]).days if s.party_key in last_rec else None,
             "prev": p, "trend": (closing - p) if p is not None else None,
-            "cat": cat, "written_off": s.customer_id in bad,
+            "cat": cat, "reason": _reason(cat, closing, monthly, coll, months, old60),
+            "written_off": s.customer_id in bad,
             "decision": decisions.get(s.customer_id),
             "dormant": closing > 0 and sales60.get(s.party_key, 0.0) == 0,
         })
     return {"has_data": True, "customers": rows, "snap_date": snap_date}
+
+
+CAT_ACTION = {
+    "A": "Retain on current terms",
+    "B": "Retain, reduced credit limit (about 15 days of sales; no growth)",
+    "C": "Advance / cash-on-delivery for new orders; weekly instalments on the old balance",
+    "D": "No new credit until part-payment of the old balance arrives; cash only meanwhile",
+    "F": "No billing for 60+ days: confirm balance, then pursue or provide",
+}
+CAT_NAME = {"A": "Retain", "B": "Reduced limit", "C": "Advance / COD", "D": "Credit hold", "F": "Dormant"}
+
+
+def _reason(cat, closing, monthly, coll, months, old60) -> str:
+    """One line saying WHY this customer is in its category (same numbers the rule uses)."""
+    stale = (old60 / closing) if closing > 0 else 0
+    if cat == "F":
+        return "No invoices in the last 60 days" + (f"; owes {closing:,.0f}" if closing > 0 else "")
+    bits = []
+    if coll is not None:
+        bits.append(f"collected {coll:.0%} of last-60-day billing")
+    if months is not None:
+        bits.append(f"owes {months:.1f} months of sales")
+    bits.append(f"{stale:.0%} of balance older than 60 days")
+    return "; ".join(bits)
 
 
 def _category(closing, monthly, coll, months, old60) -> str:

@@ -118,7 +118,7 @@ from orderr_core.templating import make_templates  # noqa: E402
 from orderr_core.services import bank_categorize  # noqa: E402
 m = ms.build(db, TODAY)
 html = make_templates().get_template("dashboard_analytics_money.html").render(
-    request=None, plant_name="T", current_time="now", m=m, analytics_view="money",
+    request=None, plant_name="T", current_time="now", m=m, analytics_view="money", cat_action=ms.CAT_ACTION, cat_name=ms.CAT_NAME,
     categories=[x for x in bank_categorize.CATEGORIES if x[2] in ("out", "nonpl", "other")])
 check("Today's position" in html and "Controls log" in html, "page renders all sections")
 print("ALL PASSED")

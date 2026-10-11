@@ -66,6 +66,11 @@ select,input[type=text]{font-size:12px;padding:5px 8px;border:1px solid var(--bo
 .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 @media(max-width:820px){.two{grid-template-columns:1fr}}
 #drill{display:none;margin-top:12px}
+.catbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.catbtn{font-size:12px;padding:6px 12px;border-radius:20px;border:1px solid var(--border-strong);background:var(--surface);color:var(--ink2);cursor:pointer}
+.catbtn.on{outline:2px solid var(--ink);font-weight:700}
+.catbtn.cat-D{background:var(--red-bg);border-color:var(--red-border);color:var(--red)}.catbtn.cat-C{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber)}.catbtn.cat-B{background:var(--blue-bg);border-color:var(--blue-border);color:var(--blue)}.catbtn.cat-A,.catbtn.cat-F{background:var(--green-bg);border-color:var(--green-border);color:var(--green)}
+#custtbl th{cursor:pointer}
 </style>
 </head>
 <body>
@@ -218,12 +223,24 @@ select,input[type=text]{font-size:12px;padding:5px 8px;border:1px solid var(--bo
       <tbody>{% for k,lab in [('0-30','0–30 days'),('31-60','31–60 days'),('61-90','61–90 days'),('90+','Over 90 days'),('pre_fy','Before this financial year')] %}<tr><td>{{ lab }}</td><td class="num">{{ inr(c.ages[k]) }}</td><td class="num">{{ pct(c.ages[k] / c.gross if c.gross else 0) }}</td></tr>{% endfor %}</tbody></table></div></div>
   </div>
 
-  <div class="sub" style="margin-top:16px">Top 20 balances</div>
-  <div class="wrap"><div class="scroll"><table>
-    <thead><tr><th>Customer</th><th>Cat</th><th class="num">Owed</th><th class="num">Sales 30d</th><th class="num">Collected % (60d)</th><th class="num">Months of sales owed</th><th class="num">&gt;30d</th><th class="num">Last receipt</th><th class="num">{{ 14 }}-day change</th></tr></thead>
-    <tbody>{% for r in c.top %}<tr><td>{{ r.name }}</td><td><span class="cat cat-{{ r.cat }}">{{ r.cat }}</span></td><td class="num"><b>{{ inr(r.closing) }}</b></td><td class="num">{{ inr(r.sales30) }}</td><td class="num">{{ pct(r.coll) }}</td><td class="num">{{ '{:.1f}'.format(r.months) if r.months is not none else '—' }}</td><td class="num">{{ inr(r.over30) }}</td>
-      <td class="num">{{ (r.days_since_receipt ~ ' d ago') if r.days_since_receipt is not none else 'none' }}</td>
-      <td class="num {{ 'red' if r.trend and r.trend > 0 else ('green' if r.trend and r.trend < 0 else '') }}">{% if r.trend is none %}—{% else %}{{ '▲' if r.trend > 0 else '▼' }} {{ inr(r.trend|abs) }}{% endif %}</td></tr>{% endfor %}</tbody></table></div></div>
+  <div class="sub" style="margin-top:16px">All customers with a balance — click a category to filter, type to search, click a column heading to sort.</div>
+  <div class="catbar" id="catbar">
+    <button class="catbtn on" data-c="ALL" onclick="filt('ALL')">All <b>{{ c.all|length }}</b></button>
+    {% for k in ['D','C','B','A','F'] %}<button class="catbtn cat-{{ k }}" data-c="{{ k }}" onclick="filt('{{ k }}')"><b>{{ k }}</b> {{ cat_name[k] }} · {{ c.cats[k].n }} · {{ inr(c.cats[k].bal) }}</button>{% endfor %}
+    <input type="text" id="custq" placeholder="search hotel…" oninput="applyFilter()" style="margin-left:auto;min-width:180px">
+  </div>
+  <div id="catnote" class="note" style="display:none"></div>
+  <div class="wrap"><div class="scroll"><table id="custtbl">
+    <thead><tr><th onclick="sortc(0,'s')">Customer ⇅</th><th onclick="sortc(1,'s')">Cat ⇅</th><th class="num" onclick="sortc(2,'n')">Owed ⇅</th><th class="num" onclick="sortc(3,'n')">Sales 30d ⇅</th><th class="num" onclick="sortc(4,'n')">Collected % ⇅</th><th class="num" onclick="sortc(5,'n')">Months owed ⇅</th><th class="num" onclick="sortc(6,'n')">&gt;30d ⇅</th><th class="num" onclick="sortc(7,'n')">Last receipt ⇅</th><th class="num" onclick="sortc(8,'n')">14-day change ⇅</th><th>Why this category</th></tr></thead>
+    <tbody>{% for r in c.all|sort(attribute='closing', reverse=True) %}<tr data-cat="{{ r.cat }}" data-name="{{ r.name|lower }}">
+      <td>{{ r.name }}</td><td data-v="{{ r.cat }}"><span class="cat cat-{{ r.cat }}">{{ r.cat }}</span></td>
+      <td class="num" data-v="{{ r.closing }}"><b>{{ inr(r.closing) }}</b></td><td class="num" data-v="{{ r.sales30 }}">{{ inr(r.sales30) }}</td>
+      <td class="num" data-v="{{ r.coll if r.coll is not none else -1 }}">{{ pct(r.coll) }}</td>
+      <td class="num" data-v="{{ r.months if r.months is not none else -1 }}">{{ '{:.1f}'.format(r.months) if r.months is not none else '—' }}</td>
+      <td class="num" data-v="{{ r.over30 }}">{{ inr(r.over30) }}</td>
+      <td class="num" data-v="{{ r.days_since_receipt if r.days_since_receipt is not none else 99999 }}">{{ (r.days_since_receipt ~ ' d ago') if r.days_since_receipt is not none else 'none' }}</td>
+      <td class="num {{ 'red' if r.trend and r.trend > 0 else ('green' if r.trend and r.trend < 0 else '') }}" data-v="{{ r.trend if r.trend is not none else 0 }}">{% if r.trend is none %}—{% else %}{{ '▲' if r.trend > 0 else '▼' }} {{ inr(r.trend|abs) }}{% endif %}</td>
+      <td style="font-size:12px;color:var(--ink2)">{{ r.reason }}</td></tr>{% endfor %}</tbody></table></div></div>
 
   <div class="sub" style="margin-top:16px">Dormant balances (no billing for 60+ days): {{ c.dormant_n }} accounts, {{ inr(c.dormant_total) }}. Record your call — it is a note only and changes no balances.</div>
   <div class="wrap"><div class="scroll"><table>
@@ -290,6 +307,30 @@ select,input[type=text]{font-size:12px;padding:5px 8px;border:1px solid var(--bo
 </main>
 
 <script>
+var curCat='ALL', ACTION={{ cat_action|tojson }};
+function filt(c){ curCat=c; document.querySelectorAll('.catbtn').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-c')===c); }); applyFilter(); }
+function applyFilter(){
+  var q=(document.getElementById('custq').value||'').toLowerCase(), n=0;
+  document.querySelectorAll('#custtbl tbody tr').forEach(function(tr){
+    var ok=(curCat==='ALL'||tr.getAttribute('data-cat')===curCat)&&(!q||tr.getAttribute('data-name').indexOf(q)>=0);
+    tr.style.display=ok?'':'none'; if(ok) n++;
+  });
+  var note=document.getElementById('catnote');
+  if(curCat!=='ALL'){ note.style.display='block'; note.innerHTML='<b>Category '+curCat+':</b> '+ACTION[curCat]+' · showing '+n; } else { note.style.display='none'; }
+}
+var sortDir={};
+function sortc(i,kind){
+  var tb=document.querySelector('#custtbl tbody'), rows=Array.prototype.slice.call(tb.rows);
+  sortDir[i]=!sortDir[i];
+  rows.sort(function(a,b){
+    var x=a.cells[i], y=b.cells[i];
+    var xv=x.hasAttribute('data-v')?x.getAttribute('data-v'):x.textContent.trim().toLowerCase();
+    var yv=y.hasAttribute('data-v')?y.getAttribute('data-v'):y.textContent.trim().toLowerCase();
+    var r = kind==='n' ? (parseFloat(xv)-parseFloat(yv)) : (xv<yv?-1:xv>yv?1:0);
+    return sortDir[i]?r:-r;
+  });
+  rows.forEach(function(r){ tb.appendChild(r); });
+}
 function post(url, body){
   return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){ if(!r.ok){ return r.json().then(function(j){ throw new Error(j.detail||'Failed'); }); } return r.json(); });
