@@ -1184,10 +1184,39 @@ def _hotel_name_for(db: Session, invoice: Invoice) -> str:
     return row[0] if row else invoice.customer_phone
 
 
+UNASSIGNED_AREA = "Unassigned"
+
+
+def _area_map(db: Session) -> dict:
+    """customer phone -> area (blank areas read as 'Unassigned')."""
+    rows = db.execute(text("SELECT phone_number, area FROM customers")).all()
+    return {r[0]: ((r[1] or "").strip() or UNASSIGNED_AREA) for r in rows}
+
+
+@router.get("/billing/api/invoices/areas")
+def api_invoice_areas(business_date: Optional[str] = None, db: Session = Depends(get_db)):
+    """Areas present among the day's invoices, with total / not-yet-printed counts."""
+    try:
+        target_date = date.fromisoformat(business_date) if business_date else _today()
+    except ValueError:
+        return JSONResponse(status_code=400, content={"error": f"Invalid date: {business_date!r}"})
+    amap = _area_map(db)
+    invs = db.scalars(select(Invoice).where(Invoice.business_date == target_date)).all()
+    out: dict = {}
+    for inv in invs:
+        a = amap.get(inv.customer_phone, UNASSIGNED_AREA)
+        d = out.setdefault(a, {"area": a, "total": 0, "unprinted": 0})
+        d["total"] += 1
+        if inv.printed_at is None:
+            d["unprinted"] += 1
+    return {"areas": sorted(out.values(), key=lambda d: d["area"].lower())}
+
+
 @router.get("/billing/api/invoices/pdf/print")
 def api_invoices_pdf_print(
     business_date: Optional[str] = None,
     scope: str = "new",
+    area: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     if business_date:
@@ -1204,10 +1233,16 @@ def api_invoices_pdf_print(
         .order_by(Invoice.invoice_number)
     ).all()
 
+    if area:
+        amap = _area_map(db)
+        all_for_date = [i for i in all_for_date
+                        if amap.get(i.customer_phone, UNASSIGNED_AREA) == area]
+
     if not all_for_date:
         return JSONResponse(
             status_code=404,
-            content={"error": f"No invoices found for {target_date.isoformat()}."},
+            content={"error": f"No invoices found for {target_date.isoformat()}"
+                              + (f" in area {area}." if area else ".")},
         )
 
     already = sum(1 for inv in all_for_date if inv.printed_at is not None)

@@ -227,6 +227,9 @@ main{max-width:900px;margin:0 auto;padding:24px 18px 80px}
   </div>
   <div class="nav-right">
     <div class="date-chip" id="date-label">-</div>
+    <select id="print-area" class="btn btn-sm" onchange="printArea(this.value)" onfocus="loadPrintAreas()" title="Print only one area's bills">
+      <option value="">Print by area…</option>
+    </select>
     <button id="print-all-btn" class="btn btn-primary btn-sm" onclick="printAllPDFs()" title="Print one bill per half-sheet. No printer settings to change — just keep Two-sided OFF.">🖨 Print all</button>
     <button id="dl-all-btn" class="btn btn-sm" onclick="dlAllPDFs()" title="Download the individual bills as a ZIP">All PDFs</button>
   </div>
@@ -1018,17 +1021,18 @@ function openAndPrint(blob){
 // Print all bills for the day. scope='new' (default) prints ONLY bills not yet
 // printed and marks them, so a later click after more invoicing prints just the
 // new ones. scope='all' reprints every bill for the day.
-async function doPrintAll(scope){
+async function doPrintAll(scope, area){
   const btn = document.getElementById('print-all-btn');
   const orig = btn.textContent;
   btn.disabled=true; btn.textContent='Preparing...';
   try{
-    const r = await fetch('/billing/api/invoices/pdf/print?business_date='+today+'&scope='+scope);
+    const r = await fetch('/billing/api/invoices/pdf/print?business_date='+today+'&scope='+scope+
+                          (area ? '&area='+encodeURIComponent(area) : ''));
     if(r.status===409){
       const d = await r.json().catch(()=>({}));
       btn.disabled=false; btn.textContent=orig;
       if(confirm((d.error||'All bills already printed.')+'\n\nReprint ALL of them anyway?')){
-        return doPrintAll('all');
+        return doPrintAll('all', area);
       }
       return;
     }
@@ -1051,6 +1055,28 @@ function printAllPDFs(){
     "Otherwise two bills print on one sheet (and can jam).\n\n"+
     "Ready to print?")) return;
   return doPrintAll('new');
+}
+
+// Area-wise printing: dropdown lists the areas that have bills today.
+async function loadPrintAreas(){
+  const sel = document.getElementById('print-area');
+  try{
+    const r = await fetch('/billing/api/invoices/areas?business_date='+today);
+    if(!r.ok) return;
+    const d = await r.json();
+    sel.innerHTML = '<option value="">Print by area…</option>' + d.areas.map(a =>
+      '<option value="'+encodeURIComponent(a.area)+'">'+a.area.replace(/</g,'&lt;')+
+      ' ('+a.unprinted+' new / '+a.total+')</option>').join('');
+  }catch(e){}
+}
+function printArea(v){
+  const sel = document.getElementById('print-area');
+  if(!v) return;
+  const area = decodeURIComponent(v);
+  sel.value = '';
+  if(!confirm('Print bills for area "'+area+'" — one bill per half-sheet.\n\n'+
+              '⚠ Make sure "Two-sided / Print on both sides" is OFF.\n\nReady to print?')) return;
+  doPrintAll('new', area);
 }
 
 // Print a single bill (repeatable). Opens inline and triggers print; also marks
