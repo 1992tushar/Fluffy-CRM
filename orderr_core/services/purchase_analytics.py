@@ -150,8 +150,22 @@ def purchase_overview(db: Session, start: date, end: date) -> dict:
         })
     suppliers.sort(key=lambda x: x["amt"], reverse=True)
 
+    # ── by day (every day in the window, zero-filled) ────────────────────────
+    day_amt, day_bills = {}, {}
+    for l in cur:
+        day_amt[l["date"]] = day_amt.get(l["date"], 0.0) + l["amt"]
+        day_bills.setdefault(l["date"], set()).add(l["bill"])
+    daily = []
+    for i in range(span):
+        d = start + timedelta(days=i)
+        amt = day_amt.get(d, 0.0)
+        daily.append({"date": d.strftime("%d %b"), "dow": d.strftime("%a"),
+                      "amt": round(amt), "amt_fmt": fmt_inr(amt),
+                      "bills": len(day_bills.get(d, ()))})
+
     return {
         "has_data": bool(cur),
+        "daily": daily,
         "from": start.isoformat(), "to": end.isoformat(), "days": span,
         "prev_from": prev_start.strftime("%d %b"), "prev_to": prev_end.strftime("%d %b"),
         "kpi": {

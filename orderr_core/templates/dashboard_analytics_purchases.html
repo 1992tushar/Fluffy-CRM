@@ -142,6 +142,22 @@ td .sub{display:block;font-size:11px;font-weight:400;color:var(--ink3)}
     <div class="kpi"><div class="n">{{ p.kpi.bills }}</div><div class="l">Bills · {{ p.kpi.suppliers }} supplier{{ '' if p.kpi.suppliers == 1 else 's' }}</div></div>
   </div>
 
+  {% set dmax = (p.daily|map(attribute='amt')|max) or 1 %}
+  <div class="section-title">📅 Day-wise purchases</div>
+  <div class="card" style="padding:12px 16px">
+    <div class="trend">
+      {% for d in p.daily %}
+      <div class="b" style="height:{{ (d.amt / dmax * 100)|round(1) }}%" title="{{ d.date }} ({{ d.dow }}) · {{ d.amt_fmt }} · {{ d.bills }} bill{{ '' if d.bills == 1 else 's' }}"></div>
+      {% endfor %}
+    </div>
+    <div class="tl">
+      {% for d in p.daily %}
+      <span>{% if p.daily|length <= 31 or loop.index0 % 7 == 0 %}{{ d.date[:2] }}{% endif %}</span>
+      {% endfor %}
+    </div>
+    <div style="font-size:11px;color:var(--ink3);margin-top:6px">Hover a bar for the day's spend. Peak day: {{ (p.daily|max(attribute='amt')).date }} · {{ (p.daily|max(attribute='amt')).amt_fmt }}</div>
+  </div>
+
   {% if p.tandoor.has_data %}
   <div class="tandoor">
   <div class="tandoor-head">&#128293; Tandoor &mdash; bought vs sold</div>
