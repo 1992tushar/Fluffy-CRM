@@ -603,6 +603,51 @@ def _exceptions(db: Session, from_date: date, to_date: date, today: date,
 
 # ── entry point ─────────────────────────────────────────────────────────────
 
+def five_day_pnl(db: Session, month_day: date) -> dict:
+    """Sales / purchases / expenses / net profit for each calendar 5-day block
+    (1–5, 6–10, … 26–month end) of the month containing `month_day`.
+    Net profit = sales − purchases − expenses (Vasy bill totals, billed basis)."""
+    first = month_day.replace(day=1)
+    nxt = (first + timedelta(days=32)).replace(day=1)
+    last = nxt - timedelta(days=1)
+
+    def by_day(model, col, amt):
+        rows = (db.query(col, func.coalesce(func.sum(amt), 0))
+                .filter(col >= first, col <= last).group_by(col).all())
+        return {d: float(v or 0) for d, v in rows}
+
+    sales = by_day(VasyInvoice, VasyInvoice.invoice_date, VasyInvoice.total)
+    purch = by_day(VasyPurchase, VasyPurchase.bill_date, VasyPurchase.total)
+    exps = by_day(VasyExpense, VasyExpense.expense_date, VasyExpense.total)
+
+    rows, tot = [], [0.0, 0.0, 0.0]
+    start = first
+    while start <= last:
+        end = min(start + timedelta(days=4), last) if start.day < 26 else last
+        s = p = e = 0.0
+        d = start
+        while d <= end:
+            s += sales.get(d, 0.0)
+            p += purch.get(d, 0.0)
+            e += exps.get(d, 0.0)
+            d += timedelta(days=1)
+        net = s - p - e
+        rows.append({
+            "label": f"{start.day}–{end.day}",
+            "sales_fmt": fmt_inr(s), "purchases_fmt": fmt_inr(p),
+            "expenses_fmt": fmt_inr(e), "net_fmt": fmt_inr(net), "neg": net < 0,
+            "future": start > month_day and not (s or p or e),
+        })
+        tot[0] += s; tot[1] += p; tot[2] += e
+        start = end + timedelta(days=1)
+    net = tot[0] - tot[1] - tot[2]
+    return {
+        "month": first.strftime("%B %Y"), "rows": rows,
+        "total": {"sales_fmt": fmt_inr(tot[0]), "purchases_fmt": fmt_inr(tot[1]),
+                  "expenses_fmt": fmt_inr(tot[2]), "net_fmt": fmt_inr(net), "neg": net < 0},
+    }
+
+
 def five_day_close(db: Session, from_date: date, to_date: date, today: date) -> dict:
     """Assemble the full close view for the window: freshness, three tie-outs,
     sales reconciliation and the exceptions list. Pure/read-only."""
@@ -652,6 +697,7 @@ def five_day_close(db: Session, from_date: date, to_date: date, today: date) -> 
         "cash": cash,
         "sales_recon": sales_recon,
         "bank": bank,
+        "pnl": five_day_pnl(db, to_date),
         "exceptions": exceptions,
         "exception_count": len(exceptions),
         "warn_count": warn_count,

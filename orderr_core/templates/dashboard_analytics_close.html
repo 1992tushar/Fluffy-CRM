@@ -174,6 +174,27 @@ main{max-width:1040px;margin:0 auto;padding:24px 18px 80px}
     <button class="toolbtn" type="button" onclick="window.print()">🖨 Print / Save PDF</button>
   </form>
 
+  <!-- 5-day profit table -->
+  <div class="section-title">5-day profit — {{ close.pnl.month }}</div>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 16px;overflow-x:auto;margin-bottom:14px">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tr>{% for h in ['Days','Sales','Purchases','Expenses','Net profit'] %}<th style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink3);padding:9px 8px;border-bottom:1px solid var(--border-strong);text-align:{{ 'left' if loop.first else 'right' }}">{{ h }}</th>{% endfor %}</tr>
+      {% for r in close.pnl.rows %}
+      <tr style="{{ 'opacity:.45' if r.future else '' }}"><td style="padding:9px 8px;border-bottom:1px solid var(--border);font-weight:600">{{ r.label }}</td>
+        <td style="padding:9px 8px;border-bottom:1px solid var(--border);text-align:right">{{ r.sales_fmt }}</td>
+        <td style="padding:9px 8px;border-bottom:1px solid var(--border);text-align:right">{{ r.purchases_fmt }}</td>
+        <td style="padding:9px 8px;border-bottom:1px solid var(--border);text-align:right">{{ r.expenses_fmt }}</td>
+        <td style="padding:9px 8px;border-bottom:1px solid var(--border);text-align:right;font-weight:700;color:{{ 'var(--red)' if r.neg else 'var(--green)' }}">{{ r.net_fmt }}</td></tr>
+      {% endfor %}
+      <tr style="background:var(--bg)"><td style="padding:9px 8px;font-weight:800">Month</td>
+        <td style="padding:9px 8px;text-align:right;font-weight:700">{{ close.pnl.total.sales_fmt }}</td>
+        <td style="padding:9px 8px;text-align:right;font-weight:700">{{ close.pnl.total.purchases_fmt }}</td>
+        <td style="padding:9px 8px;text-align:right;font-weight:700">{{ close.pnl.total.expenses_fmt }}</td>
+        <td style="padding:9px 8px;text-align:right;font-weight:800;color:{{ 'var(--red)' if close.pnl.total.neg else 'var(--green)' }}">{{ close.pnl.total.net_fmt }}</td></tr>
+    </table>
+    <div style="font-size:11px;color:var(--ink3);padding:8px 0">Month of the “To” date. Net profit = Vasy sales − purchases − expenses (billed basis; stock changes and owner drawings not considered).</div>
+  </div>
+
   <!-- freshness gate -->
   {% if close.freshness.all_fresh %}
   <div class="banner ok">✅ All Vasy streams cover the window — figures are current.</div>
