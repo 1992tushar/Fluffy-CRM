@@ -120,6 +120,7 @@ def purchase_overview(db: Session, start: date, end: date) -> dict:
             "qty": fmt_qty(round(a["qty"], 1)),
             "amt": a["amt"], "amt_fmt": fmt_inr(a["amt"]),
             "share": round(a["amt"] / tc["amt"] * 100, 1) if tc["amt"] else 0.0,
+            "qty_share": round(a["qty"] / tc["qty"] * 100, 1) if tc["qty"] else 0.0,
             "rate": round(rate, 2),
             "min_rate": min(a["rates"]) if a["rates"] else 0,
             "max_rate": max(a["rates"]) if a["rates"] else 0,
