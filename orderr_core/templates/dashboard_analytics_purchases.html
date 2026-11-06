@@ -301,7 +301,7 @@ td .sub{display:block;font-size:11px;font-weight:400;color:var(--ink3)}
     <div class="hb">
       <div class="hb-name" title="{{ i.item }}">{{ i.item }}</div>
       <div class="hb-track"><i style="width:{{ (i.amt / maxs * 100) if maxs else 0 }}%"></i></div>
-      <div class="hb-val"><b>{{ i.amt_fmt }}</b><span>{{ i.qty_share }}% of qty &middot; {{ i.qty }} @ &#8377;{{ i.rate }}</span></div>
+      <div class="hb-val"><b>{{ i.amt_fmt }}</b><span>{{ i.share }}% of spend &middot; {{ i.qty_share }}% of qty &middot; {{ i.qty }} @ &#8377;{{ i.rate }}</span></div>
     </div>
     {% endfor %}
   </div>
@@ -314,7 +314,7 @@ td .sub{display:block;font-size:11px;font-weight:400;color:var(--ink3)}
       <tr data-v0="{{ i.item|lower }}" data-v1="{{ i.qty|string|replace(',','') }}" data-v2="{{ i.qty_share }}" data-v3="{{ i.rate|string|replace(',','') }}" data-v6="{{ i.rate_chg if i.rate_chg is not none else -999 }}">
         <td class="name">{{ i.item }}<span class="sub">{{ i.bills }} bill{{ '' if i.bills == 1 else 's' }} · {{ i.suppliers }} supplier{{ '' if i.suppliers == 1 else 's' }}</span></td>
         <td>{{ i.qty }}<div class="bar"><i style="width:{{ i.qty_share }}%"></i></div><span class="sub">{{ i.qty_share }}%</span></td>
-        <td>{{ i.amt_fmt }}</td>
+        <td>{{ i.amt_fmt }}<div class="bar"><i style="width:{{ i.share }}%"></i></div><span class="sub">{{ i.share }}%</span></td>
         <td><b>₹{{ i.rate }}</b></td>
         <td>{{ i.min_rate }} – {{ i.max_rate }}</td>
         <td>{{ i.last_rate }}</td>
