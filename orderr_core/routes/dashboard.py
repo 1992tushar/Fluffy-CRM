@@ -1066,6 +1066,7 @@ _PIN_TABS = {
     "products", "purchases", "team", "reconcile",
     "credit", "rfm", "churn", "payment", "portfolio", "lifecycle",
     "wastage", "quality", "datahealth", "imports", "bankrecon", "missing_entries",
+    "customer_edit",
 }
 
 
@@ -1517,6 +1518,136 @@ def analytics_invoice_integrity(
             "analytics_view": "invoice_integrity",
         },
     )
+
+
+def _customer_edit_context(db: Session, customer_id, result=None, error=None,
+                           run_meta=None, selected_run=None):
+    """Shared context for the Customer Edit (chat audit) page."""
+    from orderr_core.models.customer import Customer
+    from orderr_core.models.customer_chat_audit import CustomerChatAudit
+    from orderr_core.services import chat_audit
+
+    customers = (db.query(Customer).filter(Customer.is_active == True)  # noqa: E712
+                 .order_by(func.lower(Customer.restaurant_name)).all())
+    history, watermark, last_names = [], None, ""
+    if customer_id:
+        watermark = chat_audit.last_audit_watermark(db, customer_id)
+        runs = (db.query(CustomerChatAudit)
+                .filter(CustomerChatAudit.customer_id == customer_id)
+                .order_by(CustomerChatAudit.id.desc()).limit(15).all())
+        for r in runs:
+            history.append({
+                "id": r.id,
+                "run_at": r.run_at.astimezone(IST).strftime("%d %b %Y %I:%M %p") if r.run_at else "",
+                "range": (f"{r.from_date.strftime('%d %b')} → {r.to_date.strftime('%d %b %Y')}"
+                          if r.from_date and r.to_date else "—"),
+                "audited_through": r.audited_through.strftime("%d %b %Y") if r.audited_through else "—",
+                "messages": r.messages_considered, "issues": r.issues_found,
+                "file": r.file_name or "",
+            })
+        if runs:
+            last_names = runs[0].our_names or ""
+    return {
+        "plant_name": PLANT_NAME,
+        "current_time": datetime.now(IST).strftime("%d %b %Y, %I:%M %p"),
+        "customers": customers,
+        "customer_id": customer_id,
+        "watermark": watermark.strftime("%d %b %Y") if watermark else None,
+        "watermark_iso": watermark.isoformat() if watermark else "",
+        "history": history,
+        "last_names": last_names,
+        "result": result,
+        "error": error,
+        "run_meta": run_meta,
+        "analytics_view": "customer_edit",
+    }
+
+
+@router.get("/analytics/customer-edit", response_class=HTMLResponse)
+def analytics_customer_edit(
+    request: Request,
+    customer_id: int = Query(default=None),
+    run: int = Query(default=None, description="reopen a saved audit run"),
+    db: Session = Depends(get_db),
+    username: str = Depends(require_auth),
+):
+    """Customer Edit — pick a customer, upload their WhatsApp chat export and
+    audit it against what was punched in Vasy. Remembers the last audited day
+    per customer so each run only covers newer chat."""
+    from orderr_core.models.customer_chat_audit import CustomerChatAudit
+
+    result = run_meta = None
+    if run:
+        row = db.get(CustomerChatAudit, run)
+        if row and row.result_json:
+            customer_id = row.customer_id
+            result = json.loads(row.result_json)
+            run_meta = {"id": row.id, "file": row.file_name, "reopened": True}
+    return templates.TemplateResponse(
+        request=request, name="dashboard_analytics_customer_edit.html",
+        context=_customer_edit_context(db, customer_id, result=result, run_meta=run_meta),
+    )
+
+
+@router.post("/analytics/customer-edit", response_class=HTMLResponse)
+async def analytics_customer_edit_run(
+    request: Request,
+    customer_id: int = Form(...),
+    chat_file: UploadFile = File(...),
+    our_names: str = Form(default=""),
+    from_date: str = Form(default=""),
+    db: Session = Depends(get_db),
+    username: str = Depends(require_auth),
+):
+    """Run one audit. Only messages after the customer's last audit watermark
+    (or the optional 'audit from' override) are checked; on success the
+    watermark advances to the last complete chat day in the file."""
+    from orderr_core.models.customer import Customer
+    from orderr_core.models.customer_chat_audit import CustomerChatAudit
+    from orderr_core.services import chat_audit
+
+    def page(**kw):
+        return templates.TemplateResponse(
+            request=request, name="dashboard_analytics_customer_edit.html",
+            context=_customer_edit_context(db, customer_id, **kw),
+        )
+
+    customer = db.get(Customer, customer_id)
+    if not customer:
+        return page(error="Pick a customer first.")
+    data = await chat_file.read()
+    if not data:
+        return page(error="The uploaded file is empty.")
+    try:
+        text = chat_audit.read_chat_text(chat_file.filename, data)
+        messages = chat_audit.parse_chat(text)
+    except Exception as e:
+        return page(error=f"Could not read that file: {e}")
+    if not messages:
+        return page(error="No chat messages found — upload the .txt (or .zip) from WhatsApp → Export chat.")
+
+    override = _parse_iso(from_date) if from_date else None
+    since = (override - timedelta(days=1)) if override else chat_audit.last_audit_watermark(db, customer_id)
+    names = [n for n in (our_names or "").split(",") if n.strip()]
+    today = get_current_business_date()
+    result = chat_audit.run_audit(db, customer, messages, names, since, today)
+    result["file_last_message"] = max(m["dt"] for m in messages).strftime("%d %b %Y %I:%M %p")
+
+    wm = chat_audit.watermark_for(result)
+    row = CustomerChatAudit(
+        customer_id=customer_id, file_name=chat_file.filename, our_names=", ".join(n.strip() for n in names),
+        from_date=date.fromisoformat(result["from_date"]) if result["from_date"] else None,
+        to_date=wm, audited_through=wm,
+        messages_considered=result["messages_considered"],
+        issues_found=chat_audit.issues_count(result),
+        result_json=json.dumps(result, default=str),
+    )
+    # A run that found nothing new must not move the watermark backwards/forwards.
+    if wm is None:
+        row.audited_through = None
+    db.add(row)
+    db.commit()
+    return page(result=result, run_meta={"id": row.id, "file": chat_file.filename, "reopened": False})
 
 
 @router.get("/analytics/ledger-deletions", response_class=HTMLResponse)

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ plant_name }} · Customer Edit</title>
+<style>
+:root{
+  --ink:#1a1a18;--ink2:#5a5a54;--ink3:#9a9a90;
+  --bg:#f4f3ef;--surface:#fff;--border:rgba(0,0,0,0.09);--border-strong:rgba(0,0,0,0.15);
+  --green:#1a6b41;--green-bg:#e8f5ee;--green-border:#b6ddc8;
+  --amber:#92540a;--amber-bg:#fef3c7;--amber-border:#f5cc6e;
+  --red:#b91c1c;--red-bg:#fee2e2;--red-border:#fca5a5;
+  --blue:#1b4fba;--blue-bg:#eff4ff;--blue-border:#b3c8f7;
+  --r:10px;--shadow:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.05);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;background:var(--bg);color:var(--ink);min-height:100vh}
+.nav{display:flex;align-items:center;background:var(--surface);border-bottom:1px solid var(--border);padding:0 20px;height:52px;position:sticky;top:0;z-index:100;box-shadow:var(--shadow)}
+.nav-back{display:flex;align-items:center;gap:4px;font-size:13px;font-weight:500;color:var(--ink3);text-decoration:none;margin-right:14px;padding:4px 8px;border-radius:6px}
+.nav-back:hover{color:var(--green);background:var(--bg)}
+.nav-logo{font-weight:700;font-size:15px;color:var(--green);display:flex;align-items:center;gap:6px}
+.nav-right{margin-left:auto}
+.date-chip{font-size:12px;color:var(--ink3);background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:4px 12px}
+main{max-width:1000px;margin:0 auto;padding:24px 18px 80px}
+.section-head{display:flex;align-items:baseline;justify-content:space-between;margin:22px 2px 12px;gap:12px;flex-wrap:wrap}
+.section-title{font-size:15px;font-weight:700}
+.note{font-size:12px;color:var(--ink3);background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--amber-border);border-radius:8px;padding:10px 14px;margin:12px 0}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:8px}
+@media(max-width:760px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;box-shadow:var(--shadow)}
+.kpi .n{font-size:22px;font-weight:800;line-height:1;letter-spacing:-.3px}
+.kpi.leak .n{color:var(--red)}
+.kpi.good .n{color:var(--green)}
+.kpi .l{font-size:10px;color:var(--ink3);margin-top:5px;text-transform:uppercase;letter-spacing:.4px}
+.wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden;margin-bottom:8px}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--bg);color:var(--ink2);text-align:left;padding:9px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border)}
+th.num,td.num{text-align:right;font-variant-numeric:tabular-nums}
+td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+tr:last-child td{border-bottom:none}
+.btn{font-size:12px;padding:5px 10px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);color:var(--ink);cursor:pointer;font-weight:600;text-decoration:none}
+.btn:hover{background:var(--bg)}
+.empty{color:var(--green);text-align:center;padding:22px;font-weight:600}
+select,input[type=text],input[type=file],input[type=date]{font-size:13px;padding:7px 10px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);color:var(--ink);max-width:100%}
+.form{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:16px;display:grid;gap:14px}
+.form label{font-size:11px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px}
+.form .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:700px){.form .row{grid-template-columns:1fr}}
+.form button.go{font-size:13px;padding:9px 16px;border:0;border-radius:8px;background:var(--green);color:#fff;cursor:pointer;font-weight:700;justify-self:start}
+.hint{font-size:11px;color:var(--ink3);margin-top:3px}
+.wm{display:inline-block;font-size:12px;font-weight:600;background:var(--blue-bg);border:1px solid var(--blue-border);color:var(--blue);border-radius:14px;padding:4px 12px}
+.wm.none{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber)}
+.err{background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);border-radius:8px;padding:10px 14px;margin:12px 0;font-weight:600}
+.tag{font-size:10px;font-weight:700;border-radius:10px;padding:2px 8px;white-space:nowrap}
+.tag.ok{background:var(--green-bg);color:var(--green)}
+.tag.bad{background:var(--red-bg);color:var(--red)}
+.tag.warn{background:var(--amber-bg);color:var(--amber)}
+.src{font-size:11px;color:var(--ink2);max-width:340px}
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <a href="/dashboard/" class="nav-back">← Dashboard</a>
+  <span class="nav-logo">📊 {{ plant_name }} Analytics</span>
+  <div class="nav-right"><span class="date-chip">{{ current_time }}</span></div>
+</div>
+
+<main>
+  {% include "_analytics_subnav.html" %}
+
+  <div class="section-head">
+    <div class="section-title">✏️ Customer edit — audit a WhatsApp chat against Vasy entries</div>
+  </div>
+
+  <div class="note">
+    Pick a customer and upload their WhatsApp <b>Export chat</b> (individual or group; the .txt or the .zip, "without media" is fine).
+    Orders found in the chat are compared with what was billed in Vasy, and payment messages with the receipts entered.
+    The audit remembers the <b>last day it covered</b> for each customer — the next run only looks at chat <i>after</i> that day.
+    Today's messages are held for the next run (their entries may not be punched yet).
+  </div>
+
+  <form method="post" enctype="multipart/form-data" class="form" action="/dashboard/analytics/customer-edit">
+    <div class="row">
+      <div>
+        <label for="cid">Customer</label>
+        <select id="cid" name="customer_id" required onchange="location.href='?customer_id='+this.value" style="width:100%">
+          <option value="">— select customer —</option>
+          {% for c in customers %}
+          <option value="{{ c.id }}" {{ 'selected' if customer_id == c.id else '' }}>{{ c.restaurant_name or c.owner_name or c.phone_number }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Last audited</label>
+        {% if customer_id %}
+          {% if watermark %}<span class="wm">✔ audited through {{ watermark }}</span>
+          {% else %}<span class="wm none">never audited — whole file will be checked</span>{% endif %}
+        {% else %}<span class="hint">select a customer to see this</span>{% endif %}
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="cf">Chat export file</label>
+        <input id="cf" type="file" name="chat_file" accept=".txt,.zip" required>
+      </div>
+      <div>
+        <label for="on">Our team's names in the chat (optional)</label>
+        <input id="on" type="text" name="our_names" value="{{ last_names }}" placeholder="e.g. Tushar, Fluffy Sales" style="width:100%">
+        <div class="hint">Comma-separated, exactly as shown in the chat. Their messages aren't counted as orders (matters for group chats).</div>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="fd">Audit from (optional override)</label>
+        <input id="fd" type="date" name="from_date" value="">
+        <div class="hint">Leave blank to continue after the last audited day. Set a date to re-audit older chat.</div>
+      </div>
+    </div>
+    <button class="go" type="submit">🔍 Run audit</button>
+  </form>
+
+  {% if error %}<div class="err">{{ error }}</div>{% endif %}
+
+  {% if result %}
+  {% set s = result.summary %}
+  <div class="section-head">
+    <div class="section-title">Result{% if run_meta %} — {{ run_meta.file }}{% if run_meta.reopened %} (saved run #{{ run_meta.id }}){% endif %}{% endif %}</div>
+    <div style="font-size:12px;color:var(--ink2)">
+      {% if result.messages_considered %}Chat {{ result.from_date }} → {{ result.to_date }}{% else %}Nothing new to audit{% endif %}
+      {% if result.since %} · after {{ result.since }}{% endif %}
+    </div>
+  </div>
+
+  {% if not result.messages_considered %}
+    <div class="note">No complete-day messages found after {{ result.since or 'the start' }} in this file
+    ({{ result.messages_in_file }} messages in file{% if result.deferred_today %}, {{ result.deferred_today }} from today held for the next run{% endif %}).</div>
+  {% else %}
+  <div class="kpis">
+    <div class="kpi good"><div class="n">{{ s.ok }}</div><div class="l">Order lines matched</div></div>
+    <div class="kpi leak"><div class="n">{{ s.missing + s.no_invoice_day }}</div><div class="l">Ordered, not billed</div></div>
+    <div class="kpi leak"><div class="n">{{ s.qty_mismatch }}</div><div class="l">Qty differs</div></div>
+    <div class="kpi leak"><div class="n">{{ s.payments_missing }}</div><div class="l">Payments w/o receipt</div></div>
+  </div>
+  <div class="note">
+    {{ result.messages_considered }} messages audited{% if result.deferred_today %} · {{ result.deferred_today }} from today held for the next run{% endif %}.
+    The next run for this customer will start after <b>{{ result.to_date }}</b>.
+    {% if result.media_days %}{{ result.media_days|sum(attribute='count') }} photo/voice/file message(s) can't be read automatically — check those days by eye.{% endif %}
+  </div>
+
+  <div class="section-head"><div class="section-title" style="font-size:13px">🍗 Orders in chat vs billed in Vasy</div></div>
+  <div class="wrap"><div class="scroll">
+    <table>
+      <thead><tr><th>Delivery day</th><th>Product</th><th class="num">Ordered</th><th class="num">Billed</th><th>Invoice</th><th>Status</th><th>Chat</th></tr></thead>
+      <tbody>
+      {% for o in result.orders if o.status != 'ok' %}
+        <tr>
+          <td>{{ o.date }}</td><td>{{ o.product }}</td>
+          <td class="num">{{ o.ordered }} {{ o.unit }}</td><td class="num">{{ o.billed }}</td>
+          <td>{{ o.vouchers|join(', ') }}</td>
+          <td>{% if o.status == 'missing' %}<span class="tag bad">Not billed</span>
+              {% elif o.status == 'no_invoice_day' %}<span class="tag bad">No invoice that day</span>
+              {% else %}<span class="tag warn">Qty differs</span>{% endif %}</td>
+          <td class="src">{{ o.chat|join(' ⏐ ') }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="empty">✓ Every order line in the chat was punched correctly.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div></div>
+  <div style="font-size:11px;color:var(--ink3);margin:0 2px 8px">Only problems are listed ({{ s.ok }} matching line(s) hidden). Orders sent after 9 PM count for the next day.</div>
+
+  <div class="section-head"><div class="section-title" style="font-size:13px">💵 Payments mentioned in chat vs receipts</div></div>
+  <div class="wrap"><div class="scroll">
+    <table>
+      <thead><tr><th>Chat date</th><th class="num">Amount</th><th>Receipt</th><th>Status</th><th>Chat</th></tr></thead>
+      <tbody>
+      {% for p in result.payments %}
+        <tr>
+          <td>{{ p.date }}</td><td class="num">{{ p.amount_fmt }}</td>
+          <td>{% if p.receipt_no %}{{ p.receipt_no }} ({{ p.receipt_date }}){% endif %}</td>
+          <td>{% if p.status == 'ok' %}<span class="tag ok">Receipt found</span>{% else %}<span class="tag bad">No receipt</span>{% endif %}</td>
+          <td class="src"><b>{{ p.sender }}:</b> {{ p.text }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="empty">No payment messages detected in this range.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div></div>
+
+  {% if result.extras %}
+  <div class="section-head"><div class="section-title" style="font-size:13px">ℹ️ Billed in Vasy but not found in chat (may be phone orders)</div></div>
+  <div class="wrap"><div class="scroll">
+    <table>
+      <thead><tr><th>Date</th><th>Product</th><th class="num">Billed</th><th>Invoice</th></tr></thead>
+      <tbody>{% for e in result.extras %}<tr><td>{{ e.date }}</td><td>{{ e.product }}</td><td class="num">{{ e.billed }}</td><td>{{ e.vouchers|join(', ') }}</td></tr>{% endfor %}</tbody>
+    </table>
+  </div></div>
+  {% endif %}
+
+  {% if result.unresolved %}
+  <div class="section-head"><div class="section-title" style="font-size:13px">❓ Chat lines the parser couldn't read (check manually)</div></div>
+  <div class="wrap"><div class="scroll">
+    <table>
+      <thead><tr><th>Date</th><th>Sender</th><th>Text</th></tr></thead>
+      <tbody>{% for u in result.unresolved %}<tr><td>{{ u.date }}</td><td>{{ u.sender }}</td><td>{{ u.text }}</td></tr>{% endfor %}</tbody>
+    </table>
+  </div></div>
+  {% endif %}
+  {% endif %}
+  {% endif %}
+
+  {% if history %}
+  <div class="section-head" style="margin-top:28px"><div class="section-title" style="font-size:13px">🕘 Audit history for this customer</div></div>
+  <div class="wrap"><div class="scroll">
+    <table>
+      <thead><tr><th>Run at</th><th>Chat range</th><th>Audited through</th><th class="num">Messages</th><th class="num">Issues</th><th>File</th><th></th></tr></thead>
+      <tbody>
+      {% for h in history %}
+        <tr><td>{{ h.run_at }}</td><td>{{ h.range }}</td><td>{{ h.audited_through }}</td>
+            <td class="num">{{ h.messages }}</td><td class="num">{{ h.issues }}</td><td class="src">{{ h.file }}</td>
+            <td><a class="btn" href="?run={{ h.id }}">View</a></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div></div>
+  {% endif %}
+</main>
+</body>
+</html>
